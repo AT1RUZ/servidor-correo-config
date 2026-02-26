@@ -1,0 +1,16 @@
+# SpamAssassin local.cf configuration
+#
+# See 'perldoc Mail::SpamAssassin::Conf' for details of what can be tweaked.
+
+# Rewrite the Subject: header of messages classified as spam
+rewrite_header Subject [SPAM]
+
+# Use Bayes learning
+use_bayes 1
+bayes_auto_learn 1
+
+# Trusted networks
+trusted_networks 127.0.0.0/8 ::1/128
+
+# Set the score required before a mail is considered spam.
+required_score 5.0
