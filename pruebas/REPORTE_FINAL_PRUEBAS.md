@@ -1,0 +1,71 @@
+# Reporte de Validación y Pruebas del Servidor de Correo Institutional
+**Proyecto:** Configuración y Aseguramiento de Servidor de Correo (Postfix, Dovecot, OpenLDAP)
+**Fecha:** 26 de febrero de 2026
+**Responsable:** Diego
+
+---
+
+## 1. Introducción
+Este documento detalla los resultados de la fase de pruebas del servidor de correo institucional `cujae.local`. Se validaron los componentes de autenticación (LDAP), transporte (Postfix), entrega local (Dovecot/LMTP) y las capas de seguridad activa (DKIM, Antispam y Antivirus).
+
+## 2. Resumen de Ejecución
+| ID | Descripción del Caso | Resultado Esperado | Estado |
+|---|---|---|---|
+| TC-01 | Directorio LDAP | Búsqueda exitosa de usuarios en OpenLDAP. | **PASSED** |
+| TC-02 | Autenticación Interna | Envío de correo autenticado vía SMTP. | **PASSED** |
+| TC-03 | Interfaz Roundcube | Acceso Webmail y envío/recepción. | **PASSED** |
+| TC-04 | Entrega LMTP | Postfix entrega a Dovecot mediante LMTP. | **PASSED** |
+| TC-05 | Seguridad DKIM | Firma criptográfica de correos salientes. | **PASSED** |
+| TC-06A| Anti-SPAM | Detección y marcado de correo basura (GTUBE).| **PASSED** |
+| TC-06B| Antivirus | Rechazo de archivos maliciosos (EICAR). | **PASSED** |
+
+---
+
+## 3. Detalle de Pruebas y Evidencias
+
+### TC-01: Validación de Directorio LDAP
+**Objetivo:** Verificar que el servidor reconozca a los usuarios institucionales.
+**Comando:** `ldapsearch -x uid=estudiante1 -b ou=people,dc=cujae,dc=local`
+**Evidencia:**
+```text
+# estudiante1, people, cujae.local
+dn: uid=estudiante1,ou=people,dc=cujae,dc=local
+objectClass: inetOrgPerson
+mail: estudiante1@cujae.local
+result: 0 Success
+```
+
+### TC-04: Entrega Local (LMTP)
+**Objetivo:** Validar la comunicación entre Postfix y el buzón de Dovecot.
+**Evidencia (Log de Dovecot):**
+```text
+feb 26 18:44:49 mail dovecot: lmtp(estudiante1@cujae.local): msgid=<...>: saved mail to INBOX
+```
+
+### TC-06A: Detección de SPAM (SpamAssassin)
+**Objetivo:** Confirmar que el motor de filtrado identifica contenido malicioso.
+**Prueba:** Se inyectó la cadena estándar GTUBE.
+**Evidencia (Análisis de Spam):**
+```text
+Content analysis details: (1003.7 points, 5.0 required)
+pts rule name              description
+---- ---------------------- --------------------------------------------------
+1000 GTUBE                  BODY: Generic Test for Unsolicited Bulk Email
+```
+
+### TC-06B: Protección Antivirus (ClamAV)
+**Objetivo:** Impedir la entrada de virus al servidor.
+**Prueba:** Intento de envío del archivo de prueba EICAR.
+**Evidencia (Rechazo SMTP):**
+```text
+<-  DATA
+<-  354 End data with <CR><LF>.<CR><LF>
+->  X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*
+<** 550 5.7.1 Command rejected
+```
+*El servidor rechazó la conexión inmediatamente al detectar la firma del virus.*
+
+---
+
+## 4. Conclusiones
+El sistema responde correctamente a las políticas de seguridad implementadas. La integración de los milters garantiza que ningún correo infectado o sospechoso de spam sea procesado por el sistema de colas, protegiendo la reputación del dominio y la integridad de los usuarios.
