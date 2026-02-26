@@ -35,11 +35,48 @@ mail: estudiante1@cujae.local
 result: 0 Success
 ```
 
+### TC-02: Autenticación Interna y Envío SMTP (SWAKS)
+**Objetivo:** Validar que el servidor acepta y encola correos internos mediante el protocolo SMTP.
+**Comando:** `swaks --to estudiante1@cujae.local --from estudiante2@cujae.local --server mail.cujae.local`
+**Evidencia:**
+```text
+<-  220 mail.cujae.local ESMTP Postfix (Ubuntu)
+ -> EHLO mail.cujae.local
+...
+ -> RCPT TO:<estudiante1@cujae.local>
+<-  250 2.1.5 Ok
+ -> DATA
+<-  354 End data with <CR><LF>.<CR><LF>
+<-  250 2.0.0 Ok: queued as 72D87A04E7
+```
+
+### TC-03: Funcionalidad de Interfaz Web (Roundcube)
+**Objetivo:** Comprobar el envío de correos a través del Webmail institucional.
+**Acción:** Envío de correo desde la interfaz Roundcube.
+**Evidencia (Log de Postfix/Dovecot):**
+```text
+feb 26 17:18:45 mail.cujae.local dovecot[1645]: lmtp(7612): Connect from local
+feb 26 17:18:45 mail.cujae.local dovecot[1645]: lmtp(estudiante2@cujae.local)<7612><igGnJ8XGoGm8HQAAM/5XIw>: msgid=<b67cc9ae451535490a826bcd77bcdde0@cujae.local>: saved mail to INBOX
+```
+
 ### TC-04: Entrega Local (LMTP)
 **Objetivo:** Validar la comunicación entre Postfix y el buzón de Dovecot.
 **Evidencia (Log de Dovecot):**
 ```text
 feb 26 18:44:49 mail dovecot: lmtp(estudiante1@cujae.local): msgid=<...>: saved mail to INBOX
+```
+
+### TC-05: Seguridad DKIM (Firma Criptográfica)
+**Objetivo:** Asegurar la autenticidad e integridad de los correos salientes.
+**Prueba:** Envío de correo mediante SMTP para activación de Milter.
+**Evidencia:** El servicio OpenDKIM (puerto 8891) procesa la solicitud de firma.
+```text
+<-  250 2.1.0 Ok
+ -> RCPT TO:<estudiante2@cujae.local>
+<-  250 2.1.5 Ok
+ -> DATA
+<-  354 End data with <CR><LF>.<CR><LF>
+<-  250 2.0.0 Ok: queued as 43FB9A31DC
 ```
 
 ### TC-06A: Detección de SPAM (SpamAssassin)
