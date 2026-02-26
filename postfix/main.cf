@@ -26,10 +26,10 @@ compatibility_level = 3.6
 
 
 # TLS parameters
-smtpd_tls_cert_file=/etc/ssl/certs/mailserver.pem
-smtpd_tls_key_file=/etc/ssl/private/mailserver.key
-smtpd_use_tls=yes
-smtpd_tls_security_level=may
+smtpd_tls_cert_file = /etc/ssl/correo/correo.crt
+smtpd_tls_key_file = /etc/ssl/correo/correo.key
+smtpd_use_tls = yes
+smtpd_tls_auth_only = yes
 
 smtp_tls_CApath=/etc/ssl/certs
 smtp_tls_security_level=may
