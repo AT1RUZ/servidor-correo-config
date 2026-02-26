@@ -1,0 +1,2 @@
+default._domainkey.cujae.local
+cujae.local:default:/etc/opendkim/keys/default.private
