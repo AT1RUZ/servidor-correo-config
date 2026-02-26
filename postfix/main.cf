@@ -1,6 +1,6 @@
 # See /usr/share/postfix/main.cf.dist for a commented, more complete version
-smtpd_milters = inet:127.0.0.1:8891 
-non_smtpd_milters = inet:127.0.0.1:8891 
+smtpd_milters = inet:127.0.0.1:8891, inet:127.0.0.1:8892
+non_smtpd_milters = inet:127.0.0.1:8891, inet:127.0.0.1:8892
 milter_default_action = accept
 
 # Debian specific:  Specifying a file name will cause the first
