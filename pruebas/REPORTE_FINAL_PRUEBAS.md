@@ -53,6 +53,10 @@ result: 0 Success
 ### TC-03: Funcionalidad de Interfaz Web (Roundcube)
 **Objetivo:** Comprobar el envío de correos a través del Webmail institucional.
 **Acción:** Envío de correo desde la interfaz Roundcube.
+**Comando de verificación (Logs):**
+```bash
+sudo journalctl -u postfix -u dovecot -n 20 --no-pager
+```
 **Evidencia (Log de Postfix/Dovecot):**
 ```text
 feb 26 17:18:45 mail.cujae.local dovecot[1645]: lmtp(7612): Connect from local
@@ -61,6 +65,10 @@ feb 26 17:18:45 mail.cujae.local dovecot[1645]: lmtp(estudiante2@cujae.local)<76
 
 ### TC-04: Entrega Local (LMTP)
 **Objetivo:** Validar la comunicación entre Postfix y el buzón de Dovecot.
+**Comando:**
+```bash
+swaks --to estudiante1@cujae.local --from estudiante2@cujae.local --server 127.0.0.1 --header "Subject: Test LMTP" --body "Test body"
+```
 **Evidencia (Log de Dovecot):**
 ```text
 feb 26 18:44:49 mail dovecot: lmtp(estudiante1@cujae.local): msgid=<...>: saved mail to INBOX
@@ -69,6 +77,10 @@ feb 26 18:44:49 mail dovecot: lmtp(estudiante1@cujae.local): msgid=<...>: saved 
 ### TC-05: Seguridad DKIM (Firma Criptográfica)
 **Objetivo:** Asegurar la autenticidad e integridad de los correos salientes.
 **Prueba:** Envío de correo mediante SMTP para activación de Milter.
+**Comando:**
+```bash
+swaks --to estudiante2@cujae.local --from estudiante1@cujae.local --server 127.0.0.1 --header "Subject: Test DKIM" --body "Test body"
+```
 **Evidencia:** El servicio OpenDKIM (puerto 8891) procesa la solicitud de firma.
 ```text
 <-  250 2.1.0 Ok
@@ -82,6 +94,11 @@ feb 26 18:44:49 mail dovecot: lmtp(estudiante1@cujae.local): msgid=<...>: saved 
 ### TC-06A: Detección de SPAM (SpamAssassin)
 **Objetivo:** Confirmar que el motor de filtrado identifica contenido malicioso.
 **Prueba:** Se inyectó la cadena estándar GTUBE.
+**Comando:**
+```bash
+echo -e "Subject: GTUBE Test\n\nXJS*C4JDBQADN1.NSBN3*2IDNEN*GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X\n" > /tmp/gtube.eml
+spamc -R < /tmp/gtube.eml
+```
 **Evidencia (Análisis de Spam):**
 ```text
 Content analysis details: (1003.7 points, 5.0 required)
@@ -93,6 +110,10 @@ pts rule name              description
 ### TC-06B: Protección Antivirus (ClamAV)
 **Objetivo:** Impedir la entrada de virus al servidor.
 **Prueba:** Intento de envío del archivo de prueba EICAR.
+**Comando:**
+```bash
+cat /tmp/eicar.com | swaks --to estudiante1@cujae.local --from estudiante2@cujae.local --server 127.0.0.1 --body -
+```
 **Evidencia (Rechazo SMTP):**
 ```text
 <-  DATA
