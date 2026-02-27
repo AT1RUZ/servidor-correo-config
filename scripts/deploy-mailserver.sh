@@ -39,7 +39,7 @@ apt install -y \
     spamassassin spamc \
     clamav-daemon clamav-milter clamav-freshclam \
     roundcube roundcube-sqlite3 apache2 libapache2-mod-php \
-    swaks mailutils wget curl git php-ldap php-imap
+    swaks mailutils wget curl git php-ldap php-imap imapsync
 
 # 3. Creación de directorios faltantes
 echo -e "${GREEN}[2/5] Preparando estructuras de directorios...${NC}"
@@ -59,6 +59,7 @@ REPO_DIR=$(pwd)
 
 # Postfix
 [ -d "$REPO_DIR/postfix" ] && cp -rv "$REPO_DIR/postfix"/* /etc/postfix/
+postmap /etc/postfix/virtual_aliases || true
 
 # Dovecot
 [ -d "$REPO_DIR/dovecot" ] && cp -rv "$REPO_DIR/dovecot"/* /etc/dovecot/
@@ -79,10 +80,8 @@ REPO_DIR=$(pwd)
 # Roundcube
 [ -d "$REPO_DIR/roundcube" ] && cp -rv "$REPO_DIR/roundcube"/* /etc/roundcube/
 
-# Apache (VirtualHost) mediante enlace simbólico para desarrollo o copia para prod
-if [ -f "$REPO_DIR/apache/mail.cujae.local.conf" ]; then
-    ln -sf "$REPO_DIR/apache/mail.cujae.local.conf" /etc/apache2/sites-available/mail.cujae.local.conf
-fi
+# Apache (VirtualHost)
+[ -f "$REPO_DIR/apache/mail.cujae.local.conf" ] && cp -v "$REPO_DIR/apache/mail.cujae.local.conf" /etc/apache2/sites-available/
 
 # 5. Ajuste de Permisos y DUEÑOS (CRÍTICO)
 echo -e "${GREEN}[4/5] Ajustando permisos de seguridad...${NC}"
@@ -123,4 +122,3 @@ chmod +x "$REPO_DIR/scripts/restart-mailserver.sh"
 "$REPO_DIR/scripts/restart-mailserver.sh"
 
 echo -e "${BLUE}=== Despliegue Completado Exitosamente ===${NC}"
-echo -e "Accede en: http://mail.cujae.local/roundcube o http://mail.local.cujae/roundcube"

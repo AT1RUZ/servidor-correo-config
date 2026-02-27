@@ -57,6 +57,8 @@ inet_interfaces = all
 inet_protocols = all
 
 virtual_mailbox_domains = cujae.local
+virtual_alias_domains = ceis.cujae.edu.cu, tele.cujae.edu.cu, civil.cujae.edu.cu, cujae.edu.cu
+virtual_alias_maps = hash:/etc/postfix/virtual_aliases
 virtual_mailbox_maps = ldap:/etc/postfix/ldap-users.cf
 virtual_transport = lmtp:unix:private/dovecot-lmtp
 smtpd_sasl_type = dovecot
