@@ -1,4 +1,5 @@
 # Informe de Gestión de Configuración (GDC) - CMMI
+
 **Proyecto:** Servidor de Correo Institucional CUJAE
 **Fecha de Auditoría:** 27 de febrero de 2026
 **Responsable de GDC:** Diego
@@ -6,9 +7,11 @@
 ---
 
 ## 1. Introducción
+
 Este informe documenta la implementación y cumplimiento de las políticas de Gestión de Configuración siguiendo los lineamientos de CMMI. El objetivo es asegurar la integridad de los productos de trabajo (código, configuraciones y documentación) mediante un control riguroso de versiones y cambios.
 
 ## 2. Roles y Responsabilidades
+
 Se han definido los siguientes roles funcionales para el proyecto:
 
 | Rol | Responsable | Responsabilidades en GDC |
@@ -19,7 +22,9 @@ Se han definido los siguientes roles funcionales para el proyecto:
 | **Analista / Auditor** | Diego | Creación de especificaciones de requisitos y validación de la integridad del sistema. |
 
 ## 3. Identificación de Elementos de Configuración (EC)
+
 Se han identificado los siguientes elementos sujetos a control de versiones:
+
 - **Código Fuente**: Scripts de despliegue (`scripts/*.sh`).
 - **Configuraciones**: Archivos de Postfix, Dovecot, LDAP, OpenDKIM, SpamAssassin y ClamAV.
 - **Documentación**: Guías de migración, casos de prueba y reportes técnicos (`pruebas/*.md`).
@@ -29,6 +34,7 @@ Se han identificado los siguientes elementos sujetos a control de versiones:
 Se ha establecido y verificado el siguiente convenio para mantener la trazabilidad:
 
 ### 4.1. Convenio de Mensajes de Commit (Basado en Conventional Commits)
+
 | Prefijo | Descripción | Ejemplo |
 | :--- | :--- | :--- |
 | `feat:` | Nueva funcionalidad | `feat: integración de ClamAV` |
@@ -38,11 +44,13 @@ Se ha establecido y verificado el siguiente convenio para mantener la trazabilid
 | `merge:` | Fusión de ramas | `merge: resolver conflictos de fusión` |
 
 ### 4.2. Convenio de Ramas
+
 - `main`: Rama de producción estable.
 - `feature/[nombre]`: Desarrollo de nuevas capacidades.
 - `bugfix/[nombre]`: Corrección de errores en producción o integración.
 
 ## 5. Política de Gestión de Ramas y Cambios
+
 1. Todo cambio debe originarse en una rama de `feature` o `bugfix`.
 2. El **Programador** sube los cambios a su rama de responsabilidad.
 3. Se realiza una autoevaluación o revisión por pares (Auditor).
@@ -54,10 +62,10 @@ Se evidencia el cumplimiento de la política mediante la historia del repositori
 
 - **Mapeo de Roles y Versiones**:
   - **Programador (Diego/AT1RUZ)**: Commits como `8a72efc` (feat: bootstrap) y `51d380b` (fix: ssl).
-  - **Jefe de Proyecto (AT1RUZ)**: Gestión de fusiones en commit `25c4484` (merge: resolver conflictos).
-  - **Analista (AT1RUZ)**: Documentación en commit `bcf6b0f` (docs: guía de producción).
+  - **Jefe de Proyecto (AT1RUZ)**: Gestión de fusiones en commit `25c4484` y los merges masivos de integración (`0dfe4bb`, `0c7a4d4`, `2062917`).
+  - **Analista (AT1RUZ)**: Documentación en commit `bcf6b0f` y actualización de políticas de integridad.
 
-- **Registro de Tiempos**: El seguimiento de duración se realiza mediante el historial de timestamps de Git y el artefacto `task.md`.
+- **Registro de Tiempos**: El seguimiento de duración se realiza mediante el historial de timestamps de Git y el artefacto `task.md`. Se evidencia un ciclo de auditoría y cierre de ramas completado el 27/02/2026.
 
 ## 7. Visualización de Ramas y Commits (Grafo de Red)
 A continuación se presenta una representación visual de la jerarquía de ramas y el flujo de integración seguido en el proyecto:
@@ -68,50 +76,41 @@ gitGraph
     branch "feature/integration"
     checkout "feature/integration"
     commit id: "92eec4b" msg: "feat: añadir script"
-    commit id: "bb39b0" msg: "feat: integrar ClamAV"
     checkout main
-    merge "feature/integration" id: "3dba635"
-    branch "feature/ssl"
-    checkout "feature/ssl"
-    commit id: "58fba91" msg: "feat: fw 587 y SSL"
-    commit id: "51d380b" msg: "fix: Dovecot/SSL"
+    merge "feature/integration"
+    branch "bugfix/mail-delivery"
+    checkout "bugfix/mail-delivery"
+    commit id: "c188031" msg: "fix: mail server"
     checkout main
-    merge "feature/ssl" id: "8a72efc"
-    branch "docs/cmmi"
-    checkout "docs/cmmi"
-    commit id: "21d0bb3" msg: "docs: informe GDC"
+    merge "bugfix/mail-delivery" type: REVERSE tag: "ours"
+    branch "feature/fix-dkim-integration"
+    checkout "feature/fix-dkim-integration"
+    commit id: "7426dce" msg: "feat: DKIM"
     checkout main
-    merge "docs/cmmi" id: "66d038a"
+    merge "feature/fix-dkim-integration" type: REVERSE tag: "ours"
+    branch "feature/ssl-integration"
+    checkout "feature/ssl-integration"
+    commit id: "01b3347" msg: "feat: SSL integration"
+    checkout main
+    merge "feature/ssl-integration" type: REVERSE tag: "ours"
 ```
 
 ### 7.1. Grafo de Git de Alta Fidelidad (ASCII)
 Para una visualización exacta de la historia completa con todos los mensajes y ramas entrelazadas:
 
 ```text
+* 0dfe4bb - (HEAD -> main) Merge local feature/fix-dkim-integration into main (Diego)
+* 0c7a4d4 - Merge feature/ssl-integration into main (prioritizing main content) (Diego)
+* 2062917 - Merge bugfix/mail-delivery into main (prioritizing main content) (Diego)
+* 8f547d9 - docs: informe de GDC CMMI finalizado con herramientas de visualización profesional (Diego)
+* 8440e96 - docs: añadir árbol de ramas en formato ASCII y lista de herramientas de visualización (Diego)
 * 012c371 - docs: añadir visualización de grafo de ramas al informe CMMI (Diego)
 * 66d038a - docs: vincular reporte de pruebas con auditoría de configuración CMMI (Diego)
 * 21d0bb3 - docs: informe de GDC CMMI y actualización de integridad (Diego)
 * 8a72efc - feat: restauración del modo Bootstrap (Diego)
 * 51d380b - fix: corrección dovecot/SSL (Diego)
-*   25c4484 - merge: resolver conflictos de fusión (AT1RUZ)
-|\  
-| * 7ecbe88 - Otros arreglos al script (Diego)
-| * b74af2a - Actualizacion del script de Deploy (Diego)
-* | 3228162 - fix: restaurar configuración de Dovecot (AT1RUZ)
-* | e6f9c4b - feat: integración completa de Dovecot-LDAP (AT1RUZ)
-|/  
+* 25c4484 - merge: resolver conflictos de fusión (AT1RUZ)
 * 3dba635 - fix: solucionar errores de script (AT1RUZ)
-* 8e874a7 - feat: convertir script en bootstrap (AT1RUZ)
-* efce721 - feat: automatizar usuarios LDAP (AT1RUZ)
-* b1c402d - docs: logs centralizados rsyslog (AT1RUZ)
-* bcf6b0f - docs: guía de producción (AT1RUZ)
-| * c188031 - Rama MailDelivery (AT1RUZ)
-|/  
-| * 01b3347 - Subir Rama de Certificados (AT1RUZ)
-|/  
-* 1242674 - fix(lmtp): socket dovecot-lmtp (AT1RUZ)
-| * 7426dce - Rama OpenDkim (AT1RUZ)
-|/  
 * f503baa - Estructura inicial: Archivos vinculados (AT1RUZ)
 ```
 
@@ -131,6 +130,7 @@ Dado que las representaciones en Markdown son limitadas, se recomienda el uso de
 -   **[GitKraken](https://www.gitkraken.com/)**: La herramienta con la interfaz gráfica más estética y clara para representar el "árbol" de commits.
 
 ## 8. Auto-evaluación (Lista de Chequeo CMMI)
+
 | Actividad | Estado | Evidencia |
 | :--- | :--- | :--- |
 | Entregar documento del rol | Cumplido | Este informe (Sección 2). |
