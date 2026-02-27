@@ -1,50 +1,51 @@
-# Guía de Migración Oficial del Servidor de Correo (CUJAE)
+# Guía Completa de Migración a Producción (CUJAE)
 
-Esta guía detalla el procedimiento para migrar los servicios de correo desde los servidores antiguos de las facultades al nuevo sistema centralizado.
+Esta guía detalla el procedimiento integral para llevar el servidor de pruebas a la infraestructura oficial de la CUJAE.
 
-## 1. Estrategia de Dominios y Redirección
-Para asegurar la continuidad, el nuevo servidor aceptará correos de los dominios antiguos y los entregará en el nuevo buzón único (`usuario@cujae.edu.cu`).
+## 1. Preparación de la Infraestructura
+### Seguridad y Red (Firewall)
+Asegúrate de que el centro de datos abra los siguientes puertos hacia el servidor:
+- **SMTP/S**: 25, 465, 587
+- **IMAP/S**: 143, 993
+- **HTTP/S**: 80, 443 (para Roundcube)
+- **LDAP**: 389 (si la sincronización es externa)
 
-### Configuración de Postfix (Aliases)
-En el servidor nuevo, se ha configurado un mapa de alias virtuales:
-- **Dominios Soportados**: `ceis.cujae.edu.cu`, `tele.cujae.edu.cu`, etc.
-- **Acción**: Todo correo a `@dominio-viejo` se reescribe a `@cujae.edu.cu`.
+### Certificados SSL/TLS (CRÍTICO)
+No uses certificados auto-firmados en producción.
+1. Solicita certificados válidos a la autoridad de certificación institucional o usa Let's Encrypt (`certbot`).
+2. Actualiza las rutas en Postfix (`main.cf`) y Dovecot (`10-ssl.conf`):
+   ```text
+   smtpd_tls_cert_file=/etc/ssl/certs/oficial_cujae.pem
+   smtpd_tls_key_file=/etc/ssl/private/oficial_cujae.key
+   ```
 
-Archivo: `/etc/postfix/virtual_aliases`
-```text
-@ceis.cujae.edu.cu    @cujae.edu.cu
-@tele.cujae.edu.cu    @cujae.edu.cu
-```
+## 2. Configuración de DNS Institucional
+El administrador del DNS de la CUJAE debe configurar los siguientes registros para `cujae.edu.cu`:
 
-## 2. Migración de Buzones con `imapsync`
-`imapsync` es la herramienta recomendada para transferir correos entre servidores IMAP de forma incremental.
+| Tipo | Host | Valor | Descripción |
+| :--- | :--- | :--- | :--- |
+| **A** | `mail` | `IP.DEL.NUEVO.SRV` | Punto de entrada |
+| **MX** | `@` | `10 mail.cujae.edu.cu` | Servidor principal |
+| **TXT** | `@` | `v=spf1 ip4:IP_SRV -all` | Registro SPF |
+| **TXT** | `default._domainkey` | `v=DKIM1; k=rsa; p=...` | Llave pública DKIM |
+| **TXT** | `_dmarc` | `v=DMARC1; p=quarantine` | Política DMARC |
 
-### Instalación
-```bash
-sudo apt install imapsync
-```
+## 3. Integración con LDAP Institucional
+Si vas a usar el servidor LDAP central de la CUJAE en lugar del local:
+1. Modifica `/etc/postfix/ldap-users.cf` y `/etc/dovecot/dovecot-ldap.conf.ext`.
+2. Actualiza `server_host`, `search_base`, `bind_dn` y `password` con los datos del servidor central.
 
-### Script de Migración Masiva
-Se debe ejecutar un ciclo por cada usuario. Ejemplo para un usuario:
-```bash
-imapsync --host1 correo-viejo.cujae.edu.cu --user1 cedtorres --pass1 "pass_vieja" \
-         --host2 mail.cujae.edu.cu --user2 cedtorres@cujae.edu.cu --pass2 "pass_nueva" \
-         --noauthmd5 --ssl1 --ssl2
-```
+## 4. Redirección de Dominios Antiguos
+Usa el archivo `postfix/virtual_aliases` para mapear los dominios legados:
+- `@ceis.cujae.edu.cu -> @cujae.edu.cu`
+- `@fe.cujae.edu.cu -> @cujae.edu.cu`
 
-### Casos Especiales (Facultades sin servidor activo)
-1. **Con Copia Vieja (Backup)**:
-   - Si tienes los archivos Maildir/Mbox, se pueden copiar directamente a `/var/vmail/cujae.local/usuario/` y ejecutar `doveadm index -u usuario@cujae.edu.cu *`.
-2. **Sin nada**:
-   - Solo se crea el usuario en el LDAP y el buzón empezará vacío.
+## 5. Migración de Buzones con `imapsync`
+(Mantenemos el procedimiento anterior de `imapsync` detallado anteriormente).
 
-## 3. Pasos del Día de la Migración (Cutover)
-1. **Reducir TTL**: 24 horas antes, reducir el TTL en el DNS institucional.
-2. **Sincronización Previa**: Ejecutar `imapsync` una semana antes para copiar el grueso de los datos.
-3. **Cambio de DNS**: Apuntar los registros MX a la nueva IP.
-4. **Sincronización Final**: Volver a ejecutar `imapsync` para copiar los correos que llegaron en el último minuto.
-5. **Apagar servidores viejos**.
-
----
-> [!IMPORTANT]
-> Asegúrate de que los nombres de usuario en el nuevo LDAP coincidan exactamente con los antiguos para facilitar el mapeo automático en `imapsync`.
+## 6. Monitoreo y Mantenimiento
+1. **Logs**: Revisa regularmente `/var/log/mail.log` y `/var/log/apache2/error.log`.
+2. **Backups**: Programa tareas `cron` para respaldar:
+   - `/var/vmail` (Buzones)
+   - `/etc/` (Configuraciones)
+   - Base de datos de Roundcube.
