@@ -5,7 +5,7 @@
 # ==============================================================================
 # Este script automatiza la instalación de paquetes y el despliegue de 
 # configuraciones para Postfix, Dovecot, LDAP, OpenDKIM, SpamAssassin, ClamAV
-# y Roundcube.
+# Roundcube y Apache.
 # 
 # Uso: sudo ./deploy-mailserver.sh
 # ==============================================================================
@@ -79,8 +79,10 @@ REPO_DIR=$(pwd)
 # Roundcube
 [ -d "$REPO_DIR/roundcube" ] && cp -rv "$REPO_DIR/roundcube"/* /etc/roundcube/
 
-# Apache (VirtualHost)
-[ -f "$REPO_DIR/apache/mail.cujae.local.conf" ] && cp -v "$REPO_DIR/apache/mail.cujae.local.conf" /etc/apache2/sites-available/
+# Apache (VirtualHost) mediante enlace simbólico para desarrollo o copia para prod
+if [ -f "$REPO_DIR/apache/mail.cujae.local.conf" ]; then
+    ln -sf "$REPO_DIR/apache/mail.cujae.local.conf" /etc/apache2/sites-available/mail.cujae.local.conf
+fi
 
 # 5. Ajuste de Permisos y DUEÑOS (CRÍTICO)
 echo -e "${GREEN}[4/5] Ajustando permisos de seguridad...${NC}"
@@ -103,15 +105,17 @@ chown -R clamav:clamav /etc/clamav/
 chown -R root:www-data /etc/roundcube
 chmod 640 /etc/roundcube/config.inc.php
 
-# Apache: Habilitar sitio y configurar /etc/hosts
-echo -e "${GREEN}Configurando Apache y dominio mail.cujae.local...${NC}"
+# Apache: Habilitar sitio y configurar /etc/hosts con ambas variantes
+echo -e "${GREEN}Configurando Apache y dominios locales...${NC}"
 a2ensite mail.cujae.local.conf || true
 a2dissite 000-default.conf || true
 
-if ! grep -q "mail.cujae.local" /etc/hosts; then
-    echo "127.0.0.1 mail.cujae.local" >> /etc/hosts
-    echo -e "Anexada entrada a /etc/hosts"
-fi
+for DOMAIN in "mail.cujae.local" "mail.local.cujae"; do
+    if ! grep -q "$DOMAIN" /etc/hosts; then
+        echo "127.0.0.1 $DOMAIN" >> /etc/hosts
+        echo -e "Anexada entrada $DOMAIN a /etc/hosts"
+    fi
+done
 
 # 6. Reinicio coordinado de servicios
 echo -e "${GREEN}[5/5] Reiniciando servicios...${NC}"
@@ -119,4 +123,4 @@ chmod +x "$REPO_DIR/scripts/restart-mailserver.sh"
 "$REPO_DIR/scripts/restart-mailserver.sh"
 
 echo -e "${BLUE}=== Despliegue Completado Exitosamente ===${NC}"
-echo -e "Accede a Roundcube en: http://mail.cujae.local/roundcube"
+echo -e "Accede en: http://mail.cujae.local/roundcube o http://mail.local.cujae/roundcube"
