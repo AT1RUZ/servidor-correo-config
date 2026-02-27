@@ -1,0 +1,8 @@
+server_host = localhost
+search_base = ou=people,dc=cujae,dc=local
+query_filter = (&(objectClass=inetOrgPerson)(mail=%s))
+result_attribute = mail
+bind = yes
+bind_dn = cn=admin,dc=cujae,dc=local
+bind_pw = 03082768021
+version = 3

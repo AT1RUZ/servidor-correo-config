@@ -35,12 +35,26 @@ Si vas a usar el servidor LDAP central de la CUJAE en lugar del local:
 1. Modifica `/etc/postfix/ldap-users.cf` y `/etc/dovecot/dovecot-ldap.conf.ext`.
 2. Actualiza `server_host`, `search_base`, `bind_dn` y `password` con los datos del servidor central.
 
-## 4. Redirección de Dominios Antiguos
+## 4. Despliegue en Contenedores (LXC / VM)
+El script `deploy-mailserver.sh` está diseñado para sistemas basados en Debian/Ubuntu con `systemd`.
+- **Contenedores LXC**: Funcionará perfectamente si el contenedor tiene `systemd` habilitado. Es ideal para el servidor "temporal" que mencionas.
+- **Docker**: No se recomienda ejecutar este script dentro de un Dockerfile estándar, ya que Postfix y Dovecot esperan un gestor de servicios real. Para Docker, se requeriría una orquestación diferente.
+
+## 5. Integración con la Red Interna de la CUJAE
+Para que el servidor sea accesible desde cualquier PC de la universidad:
+1. **Acceso Web (Roundcube)**: En el DNS institucional (o en los `hosts` de las PCs clientes), debe existir un registro que apunte `mail.cujae.edu.cu` a la IP interna del contenedor.
+2. **Conexión al LDAP Institucional**: 
+   Si el LDAP está en la misma red interna, solo necesitas actualizar la IP en:
+   - `postfix/ldap-users.cf` -> `server_host = IP_LDAP_INSTITUCIONAL`
+   - `dovecot/dovecot-ldap.conf.ext` -> `hosts = IP_LDAP_INSTITUCIONAL`
+   Asegúrate de que no haya firewalls bloqueando el puerto 389 entre el contenedor de correo y el LDAP.
+
+## 6. Redirección de Dominios Antiguos
 Usa el archivo `postfix/virtual_aliases` para mapear los dominios legados:
 - `@ceis.cujae.edu.cu -> @cujae.edu.cu`
 - `@tele.cujae.edu.cu -> @cujae.edu.cu`
 
-## 5. Sustitución de Dominio (Paso Previo al Despliegue)
+## 7. Sustitución de Dominio (Paso Previo al Despliegue)
 El repositorio actual está configurado para `cujae.local`. Antes de ejecutar `deploy-mailserver.sh` en el servidor oficial, realiza un reemplazo masivo:
 ```bash
 grep -rl "cujae.local" . | xargs sed -i 's/cujae.local/cujae.edu.cu/g'
