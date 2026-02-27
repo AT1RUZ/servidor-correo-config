@@ -49,6 +49,7 @@ mkdir -p /etc/opendkim/keys
 mkdir -p /etc/spamassassin
 mkdir -p /etc/clamav
 mkdir -p /etc/roundcube
+mkdir -p /etc/apache2/sites-available
 
 # 4. Despliegue de Configuraciones
 echo -e "${GREEN}[3/5] Desplegando archivos de configuración...${NC}"
@@ -78,6 +79,9 @@ REPO_DIR=$(pwd)
 # Roundcube
 [ -d "$REPO_DIR/roundcube" ] && cp -rv "$REPO_DIR/roundcube"/* /etc/roundcube/
 
+# Apache (VirtualHost)
+[ -f "$REPO_DIR/apache/mail.cujae.local.conf" ] && cp -v "$REPO_DIR/apache/mail.cujae.local.conf" /etc/apache2/sites-available/
+
 # 5. Ajuste de Permisos y DUEÑOS (CRÍTICO)
 echo -e "${GREEN}[4/5] Ajustando permisos de seguridad...${NC}"
 
@@ -99,11 +103,20 @@ chown -R clamav:clamav /etc/clamav/
 chown -R root:www-data /etc/roundcube
 chmod 640 /etc/roundcube/config.inc.php
 
+# Apache: Habilitar sitio y configurar /etc/hosts
+echo -e "${GREEN}Configurando Apache y dominio mail.cujae.local...${NC}"
+a2ensite mail.cujae.local.conf || true
+a2dissite 000-default.conf || true
+
+if ! grep -q "mail.cujae.local" /etc/hosts; then
+    echo "127.0.0.1 mail.cujae.local" >> /etc/hosts
+    echo -e "Anexada entrada a /etc/hosts"
+fi
+
 # 6. Reinicio coordinado de servicios
 echo -e "${GREEN}[5/5] Reiniciando servicios...${NC}"
 chmod +x "$REPO_DIR/scripts/restart-mailserver.sh"
 "$REPO_DIR/scripts/restart-mailserver.sh"
-systemctl restart apache2
 
 echo -e "${BLUE}=== Despliegue Completado Exitosamente ===${NC}"
-echo -e "Puedes verificar el estado general con: ./scripts/restart-mailserver.sh"
+echo -e "Accede a Roundcube en: http://mail.cujae.local/roundcube"
