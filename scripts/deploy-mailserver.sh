@@ -101,6 +101,10 @@ echo "y" | ufw enable
 # PARTE 3 — OPENLDAP
 # ------------------------------------------------------------------------------
 echo -e "${GREEN}[3/8] Instalando y configurando OpenLDAP...${NC}"
+# Pre-configurar el dominio para evitar el sufijo "nodomain"
+echo "slapd slapd/domain string cujae.local" | debconf-set-selections
+echo "slapd slapd/internal_err_reconfigure_failed boolean true" | debconf-set-selections
+
 apt install -y slapd ldap-utils
 
 # Inicialización de usuarios si existe el archivo
@@ -192,6 +196,12 @@ fi
 # Prueba básica con SWAKS
 apt install -y swaks
 echo -e "${BLUE}Realizando prueba de envío interna...${NC}"
-swaks --to estudiante1@cujae.local --from estudiante2@cujae.local --server localhost --header "Subject: Prueba de Despliegue" || echo -e "${RED}La prueba de SWAKS falló, revisa los logs.${NC}"
+if ! swaks --to estudiante1@cujae.local --from estudiante2@cujae.local --server localhost --header "Subject: Prueba de Despliegue"; then
+    echo -e "${RED}La prueba de SWAKS falló.${NC}"
+    echo -e "${YELLOW}Revisando logs de Postfix...${NC}"
+    journalctl -u postfix -n 20 --no-pager
+else
+    echo -e "${GREEN}Prueba de SWAKS exitosa.${NC}"
+fi
 
 echo -e "${BLUE}=== Despliegue Completado Exitosamente ===${NC}"

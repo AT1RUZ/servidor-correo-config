@@ -33,9 +33,15 @@ for SERVICE in "${SERVICES[@]}"; do
             echo -e "${GREEN}OK${NC}"
         else
             echo -e "${RED}FALLO (estado: $STATUS)${NC}"
+            echo -e "${YELLOW}--- Logs de $SERVICE ---${NC}"
+            journalctl -u "$SERVICE" -n 20 --no-pager
+            echo -e "${YELLOW}-----------------------${NC}"
         fi
     else
         echo -e "${RED}ERROR al reiniciar${NC}"
+        echo -e "${YELLOW}--- Logs de $SERVICE ---${NC}"
+        journalctl -u "$SERVICE" -n 20 --no-pager
+        echo -e "${YELLOW}-----------------------${NC}"
     fi
 done
 
