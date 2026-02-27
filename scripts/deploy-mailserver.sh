@@ -139,7 +139,7 @@ postmap /etc/postfix/virtual_aliases || true
 # PARTE 5 — SEGURIDAD AVANZADA (OpenDKIM, SpamAssassin, ClamAV)
 # ------------------------------------------------------------------------------
 echo -e "${GREEN}[6/8] Configurando seguridad avanzada...${NC}"
-apt install -y opendkim opendkim-utils spamassassin spamc clamav-daemon clamav-milter
+apt install -y opendkim opendkim-tools spamassassin spamc clamav-daemon clamav-milter
 
 # Copiar configuraciones
 [ -d "$REPO_DIR/opendkim" ] && cp -rv "$REPO_DIR/opendkim"/* /etc/opendkim/
