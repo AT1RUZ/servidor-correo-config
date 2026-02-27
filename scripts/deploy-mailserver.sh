@@ -18,6 +18,21 @@ GREEN="\033[0;32m"
 BLUE="\033[0;34m"
 NC="\033[0m" # No Color
 
+# ------------------------------------------------------------------------------
+# VARIABLES DE CONFIGURACIÓN (Ajustar antes de ejecutar)
+# ------------------------------------------------------------------------------
+
+# IP del servidor de logs central de la CUJAE (vía rsyslog)
+REMOTE_LOG_SERVER="" 
+
+# ¿Inicializar LDAP local con usuarios de prueba? (Estudiante1 y Estudiante2)
+INITIALIZE_LOCAL_LDAP="true"
+
+# Contraseña de administración de LDAP (default: admin)
+LDAP_ADMIN_PASS="admin"
+
+# ------------------------------------------------------------------------------
+
 echo -e "${BLUE}=== Iniciando Despliegue del Servidor de Correo ===${NC}"
 
 # 1. Verificación de permisos
@@ -116,7 +131,21 @@ for DOMAIN in "mail.cujae.local" "mail.local.cujae"; do
     fi
 done
 
-# 6. Reinicio coordinado de servicios
+# Configuración de Rsyslog Remoto (si se definió una IP)
+if [ -n "$REMOTE_LOG_SERVER" ]; then
+    echo -e "${GREEN}Configurando rsyslog remoto hacia $REMOTE_LOG_SERVER...${NC}"
+    echo "mail.* @@$REMOTE_LOG_SERVER:514" > /etc/rsyslog.d/50-remote.conf
+    systemctl restart rsyslog
+fi
+
+# 6. Inicialización de LDAP Local (Opcional)
+if [ "$INITIALIZE_LOCAL_LDAP" = "true" ] && [ -f "$REPO_DIR/ldap_scripts/initial_users.ldif" ]; then
+    echo -e "${GREEN}Inicializando usuarios en LDAP local (Estudiante1/2)...${NC}"
+    # Intentar cargar el LDIF (ignorando errores si los usuarios ya existen)
+    ldapadd -x -D "cn=admin,dc=cujae,dc=local" -w "$LDAP_ADMIN_PASS" -f "$REPO_DIR/ldap_scripts/initial_users.ldif" || echo "Aviso: Los registros ya existen o falló la conexión LDAP"
+fi
+
+# 7. Reinicio coordinado de servicios
 echo -e "${GREEN}[5/5] Reiniciando servicios...${NC}"
 chmod +x "$REPO_DIR/scripts/restart-mailserver.sh"
 "$REPO_DIR/scripts/restart-mailserver.sh"

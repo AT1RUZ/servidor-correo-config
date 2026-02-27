@@ -1,0 +1,19 @@
+dn: ou=people,dc=cujae,dc=local
+objectClass: organizationalUnit
+ou: people
+
+dn: uid=estudiante1,ou=people,dc=cujae,dc=local
+objectClass: inetOrgPerson
+uid: estudiante1
+cn: Estudiante1
+sn: Uno
+userPassword: {SSHA}zardPE6ATWxjk34bJFzQOXj7+vri6XM+
+mail: estudiante1@cujae.local
+
+dn: uid=estudiante2,ou=people,dc=cujae,dc=local
+objectClass: inetOrgPerson
+uid: estudiante2
+cn: Estudiante2
+sn: Dos
+userPassword: {SSHA}zardPE6ATWxjk34bJFzQOXj7+vri6XM+
+mail: estudiante2@cujae.local
