@@ -62,8 +62,8 @@ LDAP_ADMIN_PASS="admin"
 echo -e "${GREEN}[2/6] Instalando paquetes del servidor de correo...${NC}"
 export DEBIAN_FRONTEND=noninteractive
 apt install -y \
-    postfix \
-    dovecot-core dovecot-imapd dovecot-lmtpd dovecot-ldap \
+    postfix postfix-ldap \
+    dovecot-core dovecot-imapd dovecot-pop3d dovecot-ldap dovecot-lmtpd \
     slapd ldap-utils \
     opendkim opendkim-utils \
     spamassassin spamc \
