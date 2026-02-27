@@ -115,12 +115,20 @@ Para una visualización exacta de la historia completa con todos los mensajes y 
 * f503baa - Estructura inicial: Archivos vinculados (AT1RUZ)
 ```
 
-### 7.2. Herramientas Online de Visualización
-Si necesitas generar gráficos personalizados o interactivos, te recomiendo estas herramientas:
-1.  **[Mermaid Live Editor](https://mermaid.live/)**: Permite pegar el código Mermaid de este informe y descargarlo como SVG o PNG.
-2.  **[GitGraph.js](https://gitgraphjs.com/)**: Herramienta profesional para crear diagramas de ramas como árbol con mensajes personalizados.
-3.  **[Visual Git Guide (GitHub)](https://github.com/)**: Si subes el repositorio a GitHub, la pestaña **Insights > Network** muestra el árbol exacto con mensajes al pasar el ratón.
-4.  **[SourceTree](https://www.sourcetreeapp.com/) / [GitKraken](https://www.gitkraken.com/)**: Aplicaciones de escritorio que muestran el árbol gráfico más completo (ideal para auditorías CMMI).
+### 7.2. Herramientas Recomendadas para Visualización Profesional
+Dado que las representaciones en Markdown son limitadas, se recomienda el uso de las siguientes herramientas para auditorías formales:
+
+#### Herramientas Online (Gratuitas)
+1.  **[Mermaid Live Editor](https://mermaid.live/)**: Copia el bloque de código `mermaid` de la sección 7 y pégalo aquí para generar una imagen (PNG/SVG) de alta calidad.
+2.  **[GitGraph.js Playground](https://gitgraphjs.com/)**: Permite crear diagramas de ramas programáticos muy estéticos.
+3.  **[GitHub / GitLab Network Graph](https://github.com/)**: Si el repositorio se sube a estas plataformas, la pestaña "Network" ofrece el árbol más interactivo.
+
+#### Extensiones de IDE (Recomendado para uso diario)
+-   **Git Graph (VS Code)**: Busca "Git Graph" en las extensiones de VS Code. Es la herramienta más clara para ver el árbol local, los mensajes de commit y las ramas en tiempo real.
+
+#### Aplicaciones de Escritorio (Estándar de Industria)
+-   **[SourceTree](https://www.sourcetreeapp.com/)**: Gratuito y muy robusto para visualizar la historia compleja de ramas.
+-   **[GitKraken](https://www.gitkraken.com/)**: La herramienta con la interfaz gráfica más estética y clara para representar el "árbol" de commits.
 
 ## 8. Auto-evaluación (Lista de Chequeo CMMI)
 | Actividad | Estado | Evidencia |
