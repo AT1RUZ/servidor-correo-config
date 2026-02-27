@@ -28,7 +28,7 @@ $config['imap_host'] = ["localhost:143"];
 
 // SMTP server host (for sending mails).
 // See defaults.inc.php for the option description.
-$config['smtp_host'] = 'localhost:25';
+$config['smtp_host'] = 'localhost:587';
 
 // SMTP username (if required) if you use %u as the username Roundcube
 // will use the current username for login
@@ -66,9 +66,9 @@ $config['skin'] = 'elastic';
 //         see defaults.inc.php for additional informations
 $config['enable_spellcheck'] = false;
 
-$config['username_domain'] = 'cujae.local'; 
+$config['username_domain'] = 'cujae.local';
 $config['mail_domain'] = 'cujae.local';
 $config['imap_ns_namespace'] = '';
-$config['imap_delimiter'] = '/'; 
+$config['imap_delimiter'] = '/';
 $config['imap_root'] = '';
 $config['imap_force_lsub'] = true;

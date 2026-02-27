@@ -150,6 +150,11 @@ apt install -y opendkim opendkim-utils spamassassin spamc clamav-daemon clamav-m
 chown -R opendkim:opendkim /etc/opendkim/
 [ -d /etc/opendkim/keys ] && chmod 700 /etc/opendkim/keys
 
+# FORZAR SOCKET EN /etc/default/opendkim (Debian/Ubuntu fix)
+echo -e "${BLUE}Configurando socket de OpenDKIM en /etc/default/opendkim...${NC}"
+sed -i 's|^#SOCKET=.*|SOCKET="inet:8891@localhost"|' /etc/default/opendkim
+sed -i 's|^SOCKET=.*|SOCKET="inet:8891@localhost"|' /etc/default/opendkim
+
 # ------------------------------------------------------------------------------
 # PARTE 7 — ROUNDCUBE Y APACHE
 # ------------------------------------------------------------------------------
@@ -164,6 +169,9 @@ apt install -y mariadb-server apache2 libapache2-mod-php \
 # Apache setup
 a2ensite mail.cujae.local.conf || true
 a2dissite 000-default.conf || true
+a2enconf roundcube || true # Asegurar que el alias de Roundcube esté activo
+a2enmod rewrite || true  # Necesario para redirecciones si se usan .htaccess o RedirectMatch avanzado
+a2enmod alias || true    # Necesario para Alias
 
 # ------------------------------------------------------------------------------
 # PARTE 8 — FINALIZACIÓN Y VERIFICACIÓN
