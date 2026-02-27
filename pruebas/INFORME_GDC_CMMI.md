@@ -64,25 +64,63 @@ A continuación se presenta una representación visual de la jerarquía de ramas
 
 ```mermaid
 gitGraph
-    commit id: "f503baa" tag: "v0.1"
-    branch feature/integration
-    checkout feature/integration
-    commit id: "92eec4b" msg: "feat: deploy script"
-    commit id: "bb39b0" msg: "feat: antivirus"
+    commit id: "f503baa" msg: "Estructura inicial"
+    branch "feature/integration"
+    checkout "feature/integration"
+    commit id: "92eec4b" msg: "feat: añadir script"
+    commit id: "bb39b0" msg: "feat: integrar ClamAV"
     checkout main
-    merge feature/integration id: "3dba635"
-    branch feature/ssl
-    checkout feature/ssl
-    commit id: "58fba91" msg: "feat: ssl/fw587"
-    commit id: "51d380b" msg: "fix: dovecot-ssl"
+    merge "feature/integration" id: "3dba635"
+    branch "feature/ssl"
+    checkout "feature/ssl"
+    commit id: "58fba91" msg: "feat: fw 587 y SSL"
+    commit id: "51d380b" msg: "fix: Dovecot/SSL"
     checkout main
-    merge feature/ssl id: "8a72efc"
-    branch docs/cmmi
-    checkout docs/cmmi
+    merge "feature/ssl" id: "8a72efc"
+    branch "docs/cmmi"
+    checkout "docs/cmmi"
     commit id: "21d0bb3" msg: "docs: informe GDC"
     checkout main
-    merge docs/cmmi id: "66d038a"
+    merge "docs/cmmi" id: "66d038a"
 ```
+
+### 7.1. Grafo de Git de Alta Fidelidad (ASCII)
+Para una visualización exacta de la historia completa con todos los mensajes y ramas entrelazadas:
+
+```text
+* 012c371 - docs: añadir visualización de grafo de ramas al informe CMMI (Diego)
+* 66d038a - docs: vincular reporte de pruebas con auditoría de configuración CMMI (Diego)
+* 21d0bb3 - docs: informe de GDC CMMI y actualización de integridad (Diego)
+* 8a72efc - feat: restauración del modo Bootstrap (Diego)
+* 51d380b - fix: corrección dovecot/SSL (Diego)
+*   25c4484 - merge: resolver conflictos de fusión (AT1RUZ)
+|\  
+| * 7ecbe88 - Otros arreglos al script (Diego)
+| * b74af2a - Actualizacion del script de Deploy (Diego)
+* | 3228162 - fix: restaurar configuración de Dovecot (AT1RUZ)
+* | e6f9c4b - feat: integración completa de Dovecot-LDAP (AT1RUZ)
+|/  
+* 3dba635 - fix: solucionar errores de script (AT1RUZ)
+* 8e874a7 - feat: convertir script en bootstrap (AT1RUZ)
+* efce721 - feat: automatizar usuarios LDAP (AT1RUZ)
+* b1c402d - docs: logs centralizados rsyslog (AT1RUZ)
+* bcf6b0f - docs: guía de producción (AT1RUZ)
+| * c188031 - Rama MailDelivery (AT1RUZ)
+|/  
+| * 01b3347 - Subir Rama de Certificados (AT1RUZ)
+|/  
+* 1242674 - fix(lmtp): socket dovecot-lmtp (AT1RUZ)
+| * 7426dce - Rama OpenDkim (AT1RUZ)
+|/  
+* f503baa - Estructura inicial: Archivos vinculados (AT1RUZ)
+```
+
+### 7.2. Herramientas Online de Visualización
+Si necesitas generar gráficos personalizados o interactivos, te recomiendo estas herramientas:
+1.  **[Mermaid Live Editor](https://mermaid.live/)**: Permite pegar el código Mermaid de este informe y descargarlo como SVG o PNG.
+2.  **[GitGraph.js](https://gitgraphjs.com/)**: Herramienta profesional para crear diagramas de ramas como árbol con mensajes personalizados.
+3.  **[Visual Git Guide (GitHub)](https://github.com/)**: Si subes el repositorio a GitHub, la pestaña **Insights > Network** muestra el árbol exacto con mensajes al pasar el ratón.
+4.  **[SourceTree](https://www.sourcetreeapp.com/) / [GitKraken](https://www.gitkraken.com/)**: Aplicaciones de escritorio que muestran el árbol gráfico más completo (ideal para auditorías CMMI).
 
 ## 8. Auto-evaluación (Lista de Chequeo CMMI)
 | Actividad | Estado | Evidencia |
