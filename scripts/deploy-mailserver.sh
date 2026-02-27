@@ -35,8 +35,13 @@ fi
 # PARTE 1 — PREPARACIÓN DEL SISTEMA
 # ------------------------------------------------------------------------------
 echo -e "${GREEN}[1/8] Preparación del sistema...${NC}"
+export DEBIAN_FRONTEND=noninteractive
+
+# Intentar arreglar estados rotos de instalaciones previas
+apt install -f -y || true
+
 apt update && apt upgrade -y
-apt install -y rsyslog git curl wget
+apt install -y rsyslog git curl wget openssl
 
 # Configurar Hostname
 hostnamectl set-hostname mail.cujae.local
@@ -44,6 +49,16 @@ grep -q "127.0.0.1 mail.cujae.local" /etc/hosts || echo "127.0.0.1 mail.cujae.lo
 
 # Configurar Zona Horaria
 timedatectl set-timezone America/Havana
+
+# GENERACIÓN TEMPRANA DE CERTIFICADOS SSL (Evita fallos al instalar Dovecot)
+echo -e "${GREEN}[1.5/8] Generando certificados SSL preventivos...${NC}"
+mkdir -p /etc/ssl/private /etc/ssl/certs
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+    -keyout /etc/ssl/private/mailserver.key \
+    -out /etc/ssl/certs/mailserver.pem \
+    -subj "/C=CU/ST=La Habana/L=Marianao/O=CUJAE/OU=TIC/CN=mail.cujae.local"
+chmod 600 /etc/ssl/private/mailserver.key
+chown root:root /etc/ssl/private/mailserver.key
 
 # ------------------------------------------------------------------------------
 # PARTE 2 — SEGURIDAD BASE
@@ -73,7 +88,6 @@ echo "y" | ufw enable
 # PARTE 3 — OPENLDAP
 # ------------------------------------------------------------------------------
 echo -e "${GREEN}[3/8] Instalando y configurando OpenLDAP...${NC}"
-export DEBIAN_FRONTEND=noninteractive
 apt install -y slapd ldap-utils
 
 # Inicialización de usuarios si existe el archivo
@@ -109,20 +123,7 @@ cp -rv "$REPO_DIR/dovecot"/* /etc/dovecot/
 postmap /etc/postfix/virtual_aliases || true
 
 # ------------------------------------------------------------------------------
-# PARTE 5 — CERTIFICADOS SSL
-# ------------------------------------------------------------------------------
-echo -e "${GREEN}[5/8] Generando certificados SSL...${NC}"
-mkdir -p /etc/ssl/private
-openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-    -keyout /etc/ssl/private/mailserver.key \
-    -out /etc/ssl/certs/mailserver.pem \
-    -subj "/C=CU/ST=La Habana/L=Marianao/O=CUJAE/OU=TIC/CN=mail.cujae.local"
-
-chmod 600 /etc/ssl/private/mailserver.key
-chown root:root /etc/ssl/private/mailserver.key
-
-# ------------------------------------------------------------------------------
-# PARTE 6 — SEGURIDAD AVANZADA (OpenDKIM, SpamAssassin, ClamAV)
+# PARTE 5 — SEGURIDAD AVANZADA (OpenDKIM, SpamAssassin, ClamAV)
 # ------------------------------------------------------------------------------
 echo -e "${GREEN}[6/8] Configurando seguridad avanzada...${NC}"
 apt install -y opendkim opendkim-utils spamassassin spamc clamav-daemon clamav-milter
