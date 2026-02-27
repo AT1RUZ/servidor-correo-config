@@ -1,11 +1,10 @@
 #!/bin/bash
 
 # ==============================================================================
-# Script de Despliegue y Portabilidad del Servidor de Correo (CUJAE)
+# Script de Despliegue del Servidor de Correo Institucional (Basado en Guía CUJAE)
 # ==============================================================================
-# Este script automatiza la instalación de paquetes y el despliegue de 
-# configuraciones para Postfix, Dovecot, LDAP, OpenDKIM, SpamAssassin, ClamAV
-# Roundcube y Apache.
+# Este script automatiza el despliegue siguiendo las fases de la documentación
+# técnica, dando prioridad a las configuraciones del repositorio.
 # 
 # Uso: sudo ./deploy-mailserver.sh
 # ==============================================================================
@@ -18,137 +17,159 @@ GREEN="\033[0;32m"
 BLUE="\033[0;34m"
 NC="\033[0m" # No Color
 
-echo -e "${BLUE}=== Iniciando Despliegue del Servidor de Correo ===${NC}"
+echo -e "${BLUE}=== Iniciando Despliegue del Servidor de Correo (Flujo CUJAE) ===${NC}"
 
-# 1. Verificación de permisos
+# 0. Verificación de permisos
 if [[ $EUID -ne 0 ]]; then
    echo -e "${RED}Este script debe ejecutarse con sudo.${NC}" 
    exit 1
 fi
 
-# 2. Preparación inicial e instalacion de Git
-echo -e "${GREEN}[1/6] Actualizando sistema e instalando Git...${NC}"
-apt update -y
-apt install -y git
-
-# 3. Creación de Usuario Virtual de Correo (vmail)
-if ! getent group vmail > /dev/null; then
-    groupadd -g 5000 vmail
+REPO_DIR=$(pwd)
+if [ ! -d "$REPO_DIR/postfix" ] || [ ! -d "$REPO_DIR/dovecot" ]; then
+    echo -e "${RED}Error: Ejecuta el script desde la raíz del repositorio.${NC}"
+    exit 1
 fi
+
+# ------------------------------------------------------------------------------
+# PARTE 1 — PREPARACIÓN DEL SISTEMA
+# ------------------------------------------------------------------------------
+echo -e "${GREEN}[1/8] Preparación del sistema...${NC}"
+apt update && apt upgrade -y
+apt install -y rsyslog git curl wget
+
+# Configurar Hostname
+hostnamectl set-hostname mail.cujae.local
+grep -q "127.0.0.1 mail.cujae.local" /etc/hosts || echo "127.0.0.1 mail.cujae.local mail" >> /etc/hosts
+
+# Configurar Zona Horaria
+timedatectl set-timezone America/Havana
+
+# ------------------------------------------------------------------------------
+# PARTE 2 — SEGURIDAD BASE
+# ------------------------------------------------------------------------------
+echo -e "${GREEN}[2/8] Configurando seguridad base...${NC}"
+
+# Usuario Administrador
+if ! id "adminmail" &>/dev/null; then
+    adduser --disabled-password --gecos "" adminmail
+    usermod -aG sudo adminmail
+    echo -e "${BLUE}Usuario 'adminmail' creado. Recuerda asignarle una contraseña manualmente.${NC}"
+fi
+
+# Firewall (UFW)
+apt install ufw -y
+ufw default deny incoming
+ufw default allow outgoing
+ufw allow 22/tcp  # SSH
+ufw allow 25/tcp  # SMTP
+ufw allow 587/tcp # SMTP Submission
+ufw allow 143/tcp # IMAP
+ufw allow 80/tcp  # HTTP
+ufw allow 443/tcp # HTTPS
+echo "y" | ufw enable
+
+# ------------------------------------------------------------------------------
+# PARTE 3 — OPENLDAP
+# ------------------------------------------------------------------------------
+echo -e "${GREEN}[3/8] Instalando y configurando OpenLDAP...${NC}"
+export DEBIAN_FRONTEND=noninteractive
+apt install -y slapd ldap-utils
+
+# Inicialización de usuarios si existe el archivo
+if [ -f "$REPO_DIR/ldap_scripts/initial_users.ldif" ]; then
+    echo -e "${BLUE}Cargando estructura y usuarios iniciales en LDAP...${NC}"
+    # Intentar agregar, ignorar si ya existen
+    ldapadd -x -D "cn=admin,dc=cujae,dc=local" -w admin -f "$REPO_DIR/ldap_scripts/initial_users.ldif" || true
+fi
+
+# ------------------------------------------------------------------------------
+# PARTE 4 — POSTFIX Y DOVECOT
+# ------------------------------------------------------------------------------
+echo -e "${GREEN}[4/8] Instalando Postfix y Dovecot...${NC}"
+apt install -y postfix postfix-ldap \
+    dovecot-core dovecot-imapd dovecot-pop3d dovecot-lmtpd dovecot-ldap
+
+# Usuario Virtual de Correo (vmail)
+if ! getent group vmail > /dev/null; then groupadd -g 5000 vmail; fi
 if ! getent passwd vmail > /dev/null; then
     useradd -g vmail -u 5000 vmail -d /var/mail -s /usr/sbin/nologin
 fi
 
-# 4. Estructura de Buzones
-echo -e "${GREEN}[2/6] Preparando estructura de buzones...${NC}"
+# Estructura de Buzones
 mkdir -p /var/mail/vhosts/cujae.local 
 chown -R vmail:vmail /var/mail 
 chmod -R 770 /var/mail
 
-# 5. Verificación de Repositorio (Modo Bootstrap)
-REPO_DIR=$(pwd)
-if [ ! -d "$REPO_DIR/postfix" ] || [ ! -d "$REPO_DIR/dovecot" ]; then
-    echo -e "${BLUE}No se detectaron los archivos de configuración en el directorio actual.${NC}"
-    echo -n "Introduce la URL del repositorio Git de CUJAE: "
-    read -r GIT_URL
-    
-    if [ -z "$GIT_URL" ]; then
-        echo -e "${RED}Error: La URL del repositorio es obligatoria.${NC}"
-        exit 1
-    fi
-    
-    TEMP_DIR="/tmp/mailserver_config_$(date +%s)"
-    echo -e "${GREEN}Clonando repositorio en $TEMP_DIR...${NC}"
-    git clone "$GIT_URL" "$TEMP_DIR"
-    cd "$TEMP_DIR"
-    REPO_DIR=$(pwd)
-fi
+# Despliegue de Configuraciones del Repositorio
+cp -rv "$REPO_DIR/postfix"/* /etc/postfix/
+cp -rv "$REPO_DIR/dovecot"/* /etc/dovecot/
 
-# ------------------------------------------------------------------------------
-# VARIABLES DE CONFIGURACIÓN (Ajustables)
-# ------------------------------------------------------------------------------
-REMOTE_LOG_SERVER="" 
-INITIALIZE_LOCAL_LDAP="true"
-LDAP_ADMIN_PASS="admin"
-# ------------------------------------------------------------------------------
-
-# 3. Instalación de Paquetes
-echo -e "${GREEN}[3/6] Instalando paquetes del servidor de correo...${NC}"
-export DEBIAN_FRONTEND=noninteractive
-apt install -y \
-    postfix \
-    dovecot-core dovecot-imapd dovecot-pop3d dovecot-lmtpd dovecot-ldap \
-    slapd ldap-utils \
-    opendkim opendkim-utils \
-    spamassassin spamc \
-    clamav-daemon clamav-milter clamav-freshclam \
-    roundcube roundcube-sqlite3 apache2 libapache2-mod-php \
-    swaks mailutils wget curl php-ldap php-imap imapsync
-
-# 4. Creación de directorios y Despliegue de Configuraciones
-echo -e "${GREEN}[4/6] Desplegando archivos de configuración...${NC}"
-mkdir -p /etc/postfix /etc/dovecot/conf.d /etc/opendkim/keys /etc/spamassassin /etc/clamav /etc/roundcube /etc/apache2/sites-available
-
-# Copia de archivos desde el repositorio
-[ -d "$REPO_DIR/postfix" ] && cp -rv "$REPO_DIR/postfix"/* /etc/postfix/
-[ -d "$REPO_DIR/dovecot" ] && cp -rv "$REPO_DIR/dovecot"/* /etc/dovecot/
-
-# Copia de OpenDKIM (Directorio completo y tablas explícitas)
-if [ -d "$REPO_DIR/opendkim" ]; then
-    cp -rv "$REPO_DIR/opendkim"/* /etc/opendkim/
-    # Aseguramos copia explícita por si acaso
-    [ -f "$REPO_DIR/opendkim/KeyTable" ] && cp -v "$REPO_DIR/opendkim/KeyTable" /etc/opendkim/
-    [ -f "$REPO_DIR/opendkim/SigningTable" ] && cp -v "$REPO_DIR/opendkim/SigningTable" /etc/opendkim/
-    [ -f "$REPO_DIR/opendkim/TrustedHosts" ] && cp -v "$REPO_DIR/opendkim/TrustedHosts" /etc/opendkim/
-fi
-
-[ -d "$REPO_DIR/spamassassin" ] && cp -rv "$REPO_DIR/spamassassin"/* /etc/spamassassin/
-[ -d "$REPO_DIR/clamav" ] && cp -rv "$REPO_DIR/clamav"/* /etc/clamav/
-[ -d "$REPO_DIR/roundcube" ] && cp -rv "$REPO_DIR/roundcube"/* /etc/roundcube/
-[ -f "$REPO_DIR/apache/mail.cujae.local.conf" ] && cp -v "$REPO_DIR/apache/mail.cujae.local.conf" /etc/apache2/sites-available/
-
-# Mapeo de aliases de Postfix
+# Mapeo de aliases
 postmap /etc/postfix/virtual_aliases || true
 
-# 5. Ajuste de Permisos y Dueños
-echo -e "${GREEN}[5/6] Ajustando permisos de seguridad...${NC}"
-chown -R opendkim:opendkim /etc/opendkim/
-chmod 640 /etc/opendkim/KeyTable /etc/opendkim/SigningTable /etc/opendkim/TrustedHosts || true
-if [ -f /etc/opendkim/keys/default.private ]; then
-    chmod 600 /etc/opendkim/keys/default.private
-    chown opendkim:opendkim /etc/opendkim/keys/default.private
-fi
-chown -R root:root /etc/postfix /etc/dovecot
-chown -R clamav:clamav /etc/clamav/
-chown -R root:www-data /etc/roundcube
-chmod 640 /etc/roundcube/config.inc.php
+# ------------------------------------------------------------------------------
+# PARTE 5 — CERTIFICADOS SSL
+# ------------------------------------------------------------------------------
+echo -e "${GREEN}[5/8] Generando certificados SSL...${NC}"
+mkdir -p /etc/ssl/private
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+    -keyout /etc/ssl/private/mailserver.key \
+    -out /etc/ssl/certs/mailserver.pem \
+    -subj "/C=CU/ST=La Habana/L=Marianao/O=CUJAE/OU=TIC/CN=mail.cujae.local"
 
-# Permisos específicos Dovecot LDAP
-chown root:dovecot /etc/dovecot/dovecot-ldap.conf.ext || true
-chmod 640 /etc/dovecot/dovecot-ldap.conf.ext || true
+chmod 600 /etc/ssl/private/mailserver.key
+chown root:root /etc/ssl/private/mailserver.key
+
+# ------------------------------------------------------------------------------
+# PARTE 6 — SEGURIDAD AVANZADA (OpenDKIM, SpamAssassin, ClamAV)
+# ------------------------------------------------------------------------------
+echo -e "${GREEN}[6/8] Configurando seguridad avanzada...${NC}"
+apt install -y opendkim opendkim-utils spamassassin spamc clamav-daemon clamav-milter
+
+# Copiar configuraciones
+[ -d "$REPO_DIR/opendkim" ] && cp -rv "$REPO_DIR/opendkim"/* /etc/opendkim/
+[ -d "$REPO_DIR/spamassassin" ] && cp -rv "$REPO_DIR/spamassassin"/* /etc/spamassassin/
+[ -d "$REPO_DIR/clamav" ] && cp -rv "$REPO_DIR/clamav"/* /etc/clamav/
+
+# Permisos DKIM
+chown -R opendkim:opendkim /etc/opendkim/
+[ -d /etc/opendkim/keys ] && chmod 700 /etc/opendkim/keys
+
+# ------------------------------------------------------------------------------
+# PARTE 7 — ROUNDCUBE Y APACHE
+# ------------------------------------------------------------------------------
+echo -e "${GREEN}[7/8] Instalando Roundcube y MariaDB...${NC}"
+apt install -y mariadb-server apache2 libapache2-mod-php \
+    roundcube roundcube-mysql roundcube-plugins php-ldap php-imap php-gd php-xml php-mbstring php-curl php-zip php-intl
+
+# Desplegar configuraciones
+[ -d "$REPO_DIR/roundcube" ] && cp -rv "$REPO_DIR/roundcube"/* /etc/roundcube/
+[ -f "$REPO_DIR/apache/mail.cujae.local.conf" ] && cp -v "$REPO_DIR/apache/mail.cujae.local.conf" /etc/apache2/sites-available/
 
 # Apache setup
 a2ensite mail.cujae.local.conf || true
 a2dissite 000-default.conf || true
-for DOMAIN in "mail.cujae.local" "mail.local.cujae"; do
-    grep -q "$DOMAIN" /etc/hosts || echo "127.0.0.1 $DOMAIN" >> /etc/hosts
-done
 
-# Rsyslog
-if [ -n "$REMOTE_LOG_SERVER" ]; then
-    echo "mail.* @@$REMOTE_LOG_SERVER:514" > /etc/rsyslog.d/50-remote.conf
-    systemctl restart rsyslog
+# ------------------------------------------------------------------------------
+# PARTE 8 — FINALIZACIÓN Y VERIFICACIÓN
+# ------------------------------------------------------------------------------
+echo -e "${GREEN}[8/8] Finalizando despliegue...${NC}"
+
+# Ajuste final de permisos
+chown -R root:root /etc/postfix /etc/dovecot
+chown root:dovecot /etc/dovecot/dovecot-ldap.conf.ext || true
+chmod 640 /etc/dovecot/dovecot-ldap.conf.ext || true
+
+# Reinicio de servicios
+if [ -f "$REPO_DIR/scripts/restart-mailserver.sh" ]; then
+    chmod +x "$REPO_DIR/scripts/restart-mailserver.sh"
+    "$REPO_DIR/scripts/restart-mailserver.sh"
 fi
 
-# 6. Inicialización de LDAP Local
-if [ "$INITIALIZE_LOCAL_LDAP" = "true" ] && [ -f "$REPO_DIR/ldap_scripts/initial_users.ldif" ]; then
-    echo -e "${GREEN}[6/6] Inicializando usuarios en LDAP local (Estudiante1/2)...${NC}"
-    ldapadd -x -D "cn=admin,dc=cujae,dc=local" -w "$LDAP_ADMIN_PASS" -f "$REPO_DIR/ldap_scripts/initial_users.ldif" || echo "Aviso: Usuarios ya existentes o falló la conexión"
-fi
-
-# 7. Reinicio de Servicios
-echo -e "${GREEN}[6/6] Reiniciando servicios...${NC}"
-chmod +x "$REPO_DIR/scripts/restart-mailserver.sh"
-"$REPO_DIR/scripts/restart-mailserver.sh"
+# Prueba básica con SWAKS
+apt install -y swaks
+echo -e "${BLUE}Realizando prueba de envío interna...${NC}"
+swaks --to estudiante1@cujae.local --from estudiante2@cujae.local --server localhost --header "Subject: Prueba de Despliegue" || echo -e "${RED}La prueba de SWAKS falló, revisa los logs.${NC}"
 
 echo -e "${BLUE}=== Despliegue Completado Exitosamente ===${NC}"
