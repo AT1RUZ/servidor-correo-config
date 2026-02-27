@@ -1,0 +1,3 @@
+default._domainkey	IN	TXT	( "v=DKIM1; h=sha256; k=rsa; "
+	  "p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAlCDLap+uAahx5nEmMLXugJWTqz76i6RI+WCti17ECzapc93Wk3TmvrKg4G4YREfy/5yn5T/IW6BzCKpi/ZMznSnt7m/lKrdzaFCeEmGwjuuWhnb8GpIsPbkF0EsReMrjG4+vKD0sQSHEq1ZacU3gZNjxdnQ2LgvekIA2q6nHTlVAEpDwaGPA+BxY/JLH+LScGf3E4AseMrrLFV"
+	  "IjNkS+UmxdatuMItWgYWeHgtyzznURLgnig+BALqV0p0DsZyrlrQctliE1QAQIhIG3VtXisqtimu1s2cv8Iz0DGfCcoasauNqFna+QxfUjLaAGxQGzyWBDcrF6UimN9V2g97MOmQIDAQAB" )  ; ----- DKIM key default for cujae.local

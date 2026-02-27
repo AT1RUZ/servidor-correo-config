@@ -4,7 +4,8 @@
 # Script de Despliegue y Portabilidad del Servidor de Correo (CUJAE)
 # ==============================================================================
 # Este script automatiza la instalación de paquetes y el despliegue de 
-# configuraciones para Postfix, Dovecot, LDAP, OpenDKIM, SpamAssassin y ClamAV.
+# configuraciones para Postfix, Dovecot, LDAP, OpenDKIM, SpamAssassin, ClamAV
+# y Roundcube.
 # 
 # Uso: sudo ./deploy-mailserver.sh
 # ==============================================================================
@@ -37,7 +38,8 @@ apt install -y \
     opendkim opendkim-utils \
     spamassassin spamc \
     clamav-daemon clamav-milter clamav-freshclam \
-    swaks mailutils wget curl git
+    roundcube roundcube-sqlite3 apache2 libapache2-mod-php \
+    swaks mailutils wget curl git php-ldap php-imap
 
 # 3. Creación de directorios faltantes
 echo -e "${GREEN}[2/5] Preparando estructuras de directorios...${NC}"
@@ -46,6 +48,7 @@ mkdir -p /etc/dovecot/conf.d
 mkdir -p /etc/opendkim/keys
 mkdir -p /etc/spamassassin
 mkdir -p /etc/clamav
+mkdir -p /etc/roundcube
 
 # 4. Despliegue de Configuraciones
 echo -e "${GREEN}[3/5] Desplegando archivos de configuración...${NC}"
@@ -72,6 +75,9 @@ REPO_DIR=$(pwd)
 # ClamAV
 [ -d "$REPO_DIR/clamav" ] && cp -rv "$REPO_DIR/clamav"/* /etc/clamav/
 
+# Roundcube
+[ -d "$REPO_DIR/roundcube" ] && cp -rv "$REPO_DIR/roundcube"/* /etc/roundcube/
+
 # 5. Ajuste de Permisos y DUEÑOS (CRÍTICO)
 echo -e "${GREEN}[4/5] Ajustando permisos de seguridad...${NC}"
 
@@ -85,15 +91,19 @@ fi
 
 # Postfix / Dovecot
 chown -R root:root /etc/postfix /etc/dovecot
-# Asegurar permisos de lectura para archivos de configuración específicos si es necesario
 
 # ClamAV
 chown -R clamav:clamav /etc/clamav/
+
+# Roundcube
+chown -R root:www-data /etc/roundcube
+chmod 640 /etc/roundcube/config.inc.php
 
 # 6. Reinicio coordinado de servicios
 echo -e "${GREEN}[5/5] Reiniciando servicios...${NC}"
 chmod +x "$REPO_DIR/scripts/restart-mailserver.sh"
 "$REPO_DIR/scripts/restart-mailserver.sh"
+systemctl restart apache2
 
 echo -e "${BLUE}=== Despliegue Completado Exitosamente ===${NC}"
 echo -e "Puedes verificar el estado general con: ./scripts/restart-mailserver.sh"
