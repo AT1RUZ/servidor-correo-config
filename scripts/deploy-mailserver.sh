@@ -19,7 +19,7 @@ NC="\033[0m" # No Color
 
 echo -e "${BLUE}=== Iniciando Despliegue del Servidor de Correo (Flujo CUJAE) ===${NC}"
 
-# 0. Verificación de permisos
+# 0. Verificación de permisos y Modo Bootstrap
 if [[ $EUID -ne 0 ]]; then
    echo -e "${RED}Este script debe ejecutarse con sudo.${NC}" 
    exit 1
@@ -27,8 +27,21 @@ fi
 
 REPO_DIR=$(pwd)
 if [ ! -d "$REPO_DIR/postfix" ] || [ ! -d "$REPO_DIR/dovecot" ]; then
-    echo -e "${RED}Error: Ejecuta el script desde la raíz del repositorio.${NC}"
-    exit 1
+    echo -e "${BLUE}No se detectaron los archivos de configuración en el directorio actual.${NC}"
+    echo -n "Introduce la URL del repositorio Git de CUJAE: "
+    read -r GIT_URL
+    
+    if [ -z "$GIT_URL" ]; then
+        echo -e "${RED}Error: La URL del repositorio es obligatoria para el modo Bootstrap.${NC}"
+        exit 1
+    fi
+    
+    apt update && apt install -y git
+    TEMP_DIR="/tmp/mailserver_config_$(date +%s)"
+    echo -e "${GREEN}Clonando repositorio en $TEMP_DIR...${NC}"
+    git clone "$GIT_URL" "$TEMP_DIR"
+    cd "$TEMP_DIR" || exit 1
+    REPO_DIR=$(pwd)
 fi
 
 # ------------------------------------------------------------------------------
