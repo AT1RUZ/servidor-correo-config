@@ -67,5 +67,20 @@ Para que los usuarios no tengan que escribir puertos y servidores:
 (Procedimiento incremental detallado anteriormente).
 
 ## 8. Monitoreo y Mantenimiento
-1. **Seguridad**: Instala `fail2ban` para proteger contra ataques de fuerza bruta en el puerto 25 y 993.
-2. **Backups**: Respalda diariamente `/var/vmail` y la configuración de LDAP.
+### Logs Centralizados (Syslog Remoto)
+Para enviar los logs de Postfix, Dovecot y el sistema a un servidor central de la CUJAE (vía `rsyslog`):
+1. Edita el archivo `/etc/rsyslog.d/50-remote.conf` (o crea uno nuevo):
+   ```text
+   # Enviar todos los logs vía UDP al servidor central
+   *.* @IP_SERVIDOR_LOGS:514
+
+   # O enviar solo los logs de correo vía TCP (más confiable)
+   mail.* @@IP_SERVIDOR_LOGS:514
+   ```
+2. Reinicia el servicio: `sudo systemctl restart rsyslog`.
+
+### Seguridad
+Instala `fail2ban` para proteger contra ataques de fuerza bruta en el puerto 25 y 993.
+
+### Backups
+Respalda diariamente `/var/vmail` y la configuración de LDAP.
