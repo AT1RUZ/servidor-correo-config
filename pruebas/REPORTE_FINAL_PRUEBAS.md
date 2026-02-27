@@ -125,5 +125,8 @@ cat /tmp/eicar.com | swaks --to estudiante1@cujae.local --from estudiante2@cujae
 
 ---
 
-## 4. Conclusiones
-El sistema responde correctamente a las políticas de seguridad implementadas. La integración de los milters garantiza que ningún correo infectado o sospechoso de spam sea procesado por el sistema de colas, protegiendo la reputación del dominio y la integridad de los usuarios.
+## 5. Gestión de Configuración (GDC)
+Se confirma que todos los elementos evaluados en este reporte están bajo control de versiones siguiendo la política institucional. Para más detalles sobre convenios de nombres, roles y auditoría de integridad, consulte el [Informe de Gestión de Configuración CMMI](INFORME_GDC_CMMI.md).
+
+## 6. Conclusiones
+El sistema responde correctamente a las políticas de seguridad e integridad implementadas. La gestión de configuración asegura que los cambios son trazables y aprobados por los roles correspondientes.
