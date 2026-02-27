@@ -38,14 +38,34 @@ Si vas a usar el servidor LDAP central de la CUJAE en lugar del local:
 ## 4. Redirección de Dominios Antiguos
 Usa el archivo `postfix/virtual_aliases` para mapear los dominios legados:
 - `@ceis.cujae.edu.cu -> @cujae.edu.cu`
-- `@fe.cujae.edu.cu -> @cujae.edu.cu`
+- `@tele.cujae.edu.cu -> @cujae.edu.cu`
 
-## 5. Migración de Buzones con `imapsync`
-(Mantenemos el procedimiento anterior de `imapsync` detallado anteriormente).
+## 5. Sustitución de Dominio (Paso Previo al Despliegue)
+El repositorio actual está configurado para `cujae.local`. Antes de ejecutar `deploy-mailserver.sh` en el servidor oficial, realiza un reemplazo masivo:
+```bash
+grep -rl "cujae.local" . | xargs sed -i 's/cujae.local/cujae.edu.cu/g'
+```
+*Nota: Revisa también los nombres de los archivos en `apache/` y `postfix/`.*
 
-## 6. Monitoreo y Mantenimiento
-1. **Logs**: Revisa regularmente `/var/log/mail.log` y `/var/log/apache2/error.log`.
-2. **Backups**: Programa tareas `cron` para respaldar:
-   - `/var/vmail` (Buzones)
-   - `/etc/` (Configuraciones)
-   - Base de datos de Roundcube.
+## 6. Configuraciones Avanzadas (Para un Correo de Calidad)
+### Cuotas de Disco (Dovecot Quota)
+Para evitar que un usuario llene el disco del servidor:
+1. Habilita el plugin `quota` en `10-mail.conf` y `20-imap.conf`.
+2. Define el límite en `90-quota.conf` (ej. `vmail_quota = 2G`).
+
+### Filtros Sieve (Pigeonhole)
+Permite a los usuarios crear reglas de filtrado (ej. "mover a carpeta Facturas"):
+1. Instala `dovecot-sieve dovecot-managesieved`.
+2. Habilita el protocolo `sieve` en `10-master.conf` y configura el puerto 4190.
+
+### Autoconfiguración (Thunderbird/Outlook)
+Para que los usuarios no tengan que escribir puertos y servidores:
+1. Crea registros DNS CNAME: `autoconfig.cujae.edu.cu` y `autodiscover.cujae.edu.cu`.
+2. Configura un VirtualHost en Apache que sirva los archivos XML de configuración automática.
+
+## 7. Migración de Buzones con `imapsync`
+(Procedimiento incremental detallado anteriormente).
+
+## 8. Monitoreo y Mantenimiento
+1. **Seguridad**: Instala `fail2ban` para proteger contra ataques de fuerza bruta en el puerto 25 y 993.
+2. **Backups**: Respalda diariamente `/var/vmail` y la configuración de LDAP.
