@@ -79,9 +79,6 @@ mkdir -p /etc/postfix /etc/dovecot/conf.d /etc/opendkim/keys /etc/spamassassin /
 [ -d "$REPO_DIR/postfix" ] && cp -rv "$REPO_DIR/postfix"/* /etc/postfix/
 [ -d "$REPO_DIR/dovecot" ] && cp -rv "$REPO_DIR/dovecot"/* /etc/dovecot/
 [ -d "$REPO_DIR/opendkim" ] && cp -rv "$REPO_DIR/opendkim"/* /etc/opendkim/
-[ -f "$REPO_DIR/KeyTable" ] && cp "$REPO_DIR/KeyTable" /etc/opendkim/
-[ -f "$REPO_DIR/SigningTable" ] && cp "$REPO_DIR/SigningTable" /etc/opendkim/
-[ -f "$REPO_DIR/TrustedHosts" ] && cp "$REPO_DIR/TrustedHosts" /etc/opendkim/
 [ -d "$REPO_DIR/spamassassin" ] && cp -rv "$REPO_DIR/spamassassin"/* /etc/spamassassin/
 [ -d "$REPO_DIR/clamav" ] && cp -rv "$REPO_DIR/clamav"/* /etc/clamav/
 [ -d "$REPO_DIR/roundcube" ] && cp -rv "$REPO_DIR/roundcube"/* /etc/roundcube/
@@ -93,7 +90,12 @@ postmap /etc/postfix/virtual_aliases || true
 # 5. Ajuste de Permisos y Dueños
 echo -e "${GREEN}[4/6] Ajustando permisos de seguridad...${NC}"
 chown -R opendkim:opendkim /etc/opendkim/
-chmod 640 /etc/opendkim/KeyTable /etc/opendkim/SigningTable /etc/opendkim/TrustedHosts || true
+# OpenDKIM permissions for tables if they exist
+for FILE in "KeyTable" "SigningTable" "TrustedHosts"; do
+    if [ -f "/etc/opendkim/$FILE" ]; then
+        chmod 640 "/etc/opendkim/$FILE"
+    fi
+done
 if [ -f /etc/opendkim/keys/default.private ]; then
     chmod 600 /etc/opendkim/keys/default.private
     chown opendkim:opendkim /etc/opendkim/keys/default.private
@@ -118,7 +120,7 @@ fi
 
 # 6. Inicialización de LDAP Local
 if [ "$INITIALIZE_LOCAL_LDAP" = "true" ] && [ -f "$REPO_DIR/ldap_scripts/initial_users.ldif" ]; then
-    echo -e "${GREEN}[5/6] Inicializando usuarios en LDAP local...\"
+    echo -e "${GREEN}[5/6] Inicializando usuarios en LDAP local...${NC}"
     ldapadd -x -D "cn=admin,dc=cujae,dc=local" -w "$LDAP_ADMIN_PASS" -f "$REPO_DIR/ldap_scripts/initial_users.ldif" || echo "Aviso: Usuarios ya existentes"
 fi
 
