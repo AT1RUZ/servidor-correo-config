@@ -59,7 +59,32 @@ Se evidencia el cumplimiento de la política mediante la historia del repositori
 
 - **Registro de Tiempos**: El seguimiento de duración se realiza mediante el historial de timestamps de Git y el artefacto `task.md`.
 
-## 7. Auto-evaluación (Lista de Chequeo CMMI)
+## 7. Visualización de Ramas y Commits (Grafo de Red)
+A continuación se presenta una representación visual de la jerarquía de ramas y el flujo de integración seguido en el proyecto:
+
+```mermaid
+gitGraph
+    commit id: "f503baa" tag: "v0.1"
+    branch feature/integration
+    checkout feature/integration
+    commit id: "92eec4b" msg: "feat: deploy script"
+    commit id: "bb39b0" msg: "feat: antivirus"
+    checkout main
+    merge feature/integration id: "3dba635"
+    branch feature/ssl
+    checkout feature/ssl
+    commit id: "58fba91" msg: "feat: ssl/fw587"
+    commit id: "51d380b" msg: "fix: dovecot-ssl"
+    checkout main
+    merge feature/ssl id: "8a72efc"
+    branch docs/cmmi
+    checkout docs/cmmi
+    commit id: "21d0bb3" msg: "docs: informe GDC"
+    checkout main
+    merge docs/cmmi id: "66d038a"
+```
+
+## 8. Auto-evaluación (Lista de Chequeo CMMI)
 | Actividad | Estado | Evidencia |
 | :--- | :--- | :--- |
 | Entregar documento del rol | Cumplido | Este informe (Sección 2). |
