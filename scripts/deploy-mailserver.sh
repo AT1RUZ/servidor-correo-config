@@ -4,7 +4,6 @@
 # Script de Despliegue y Portabilidad del Servidor de Correo (CUJAE)
 # ==============================================================================
 # Este script automatiza la instalación de paquetes y el despliegue de
-# Este script automatiza la instalación de paquetes y el despliegue de
 # configuraciones para Postfix, Dovecot, LDAP, OpenDKIM, SpamAssassin, ClamAV
 # Roundcube y Apache.
 #
@@ -343,6 +342,7 @@ cat > /etc/roundcube/debian-db-roundcube.php << PHPEOF
 \$dbserver='localhost';
 \$dbport='3306';
 \$dbtype='mysql';
+\$config['db_dsnw'] = \$dbtype . '://' . \$dbuser . ':' . rawurlencode(\$dbpass) . '@' . \$dbserver . '/' . \$dbname;
 PHPEOF
 chown root:www-data /etc/roundcube/debian-db-roundcube.php
 chmod 640 /etc/roundcube/debian-db-roundcube.php
