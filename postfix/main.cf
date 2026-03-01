@@ -37,20 +37,24 @@ smtp_tls_session_cache_database = btree:${data_directory}/smtp_scache
 
 
 smtpd_relay_restrictions = permit_mynetworks permit_sasl_authenticated defer_unauth_destination
-# Network configurations
+#myhostname = mail.cujae.local
+alias_maps = hash:/etc/aliases
+alias_database = hash:/etc/aliases
+#myorigin = /etc/mailname
+#mydestination = $myhostname, cujae.local, mail.cujae.local, localhost.cujae.local, localhost
+relayhost = 
+mynetworks = 127.0.0.0/8 [::ffff:127.0.0.0]/104 [::1]/128
+mailbox_size_limit = 0
+recipient_delimiter = +
+inet_interfaces = all
+#inet_protocols = all
+
 myhostname = mail.cujae.local
 mydomain = cujae.local
 myorigin = /etc/mailname
 mydestination = localhost
-mynetworks = 127.0.0.0/8 [::ffff:127.0.0.0]/104 [::1]/128
 inet_interfaces = all
 inet_protocols = all
-
-# Aliases and limits
-alias_maps = hash:/etc/aliases
-alias_database = hash:/etc/aliases
-mailbox_size_limit = 0
-recipient_delimiter = +
 
 virtual_mailbox_domains = cujae.local
 virtual_alias_domains = ceis.cujae.edu.cu, tele.cujae.edu.cu, civil.cujae.edu.cu, cujae.edu.cu
