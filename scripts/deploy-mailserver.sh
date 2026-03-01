@@ -26,12 +26,26 @@ if [[ $EUID -ne 0 ]]; then
    exit 1
 fi
 
-# 2. Preparación inicial y Git
-echo -e "${GREEN}[1/6] Actualizando sistema e instalando Git...${NC}"
-apt update -y
-apt install -y git
+# ------------------------------------------------------------------------------
+# VARIABLES DE CONFIGURACIÓN (Ajustables)
+# ------------------------------------------------------------------------------
+REMOTE_LOG_SERVER="" 
+INITIALIZE_LOCAL_LDAP="true"
+LDAP_ADMIN_PASS="admin"
+# ------------------------------------------------------------------------------
 
-# 3. Creación de Usuario Virtual de Correo (vmail)
+# 2. Preparación inicial y Git
+echo -e "${GREEN}[1/7] Preparando sistema e instalando herramientas base...${NC}"
+apt update -y
+apt install -y git debconf-utils
+
+# 3. Pre-configuración de Slapd (Evita error de credenciales)
+echo -e "${GREEN}[2/7] Pre-configurando LDAP para cujae.local...${NC}"
+echo "slapd slapd/domain string cujae.local" | debconf-set-selections
+echo "slapd slapd/internal_admin_password password $LDAP_ADMIN_PASS" | debconf-set-selections
+echo "slapd slapd/internal_admin_password_again password $LDAP_ADMIN_PASS" | debconf-set-selections
+
+# 4. Creación de Usuario Virtual de Correo (vmail)
 if ! getent group vmail > /dev/null; then
     groupadd -g 5000 vmail
 fi
@@ -39,13 +53,13 @@ if ! getent passwd vmail > /dev/null; then
     useradd -g vmail -u 5000 vmail -d /var/mail -s /usr/sbin/nologin
 fi
 
-# 4. Estructura de Buzones
-echo -e "${GREEN}[2/6] Preparando estructura de buzones...${NC}"
+# 5. Estructura de Buzones
+echo -e "${GREEN}[3/7] Preparando estructura de buzones...${NC}"
 mkdir -p /var/mail/vhosts/cujae.local 
 chown -R vmail:vmail /var/mail 
 chmod -R 770 /var/mail
 
-# 5. Verificación de Repositorio (Modo Bootstrap)
+# 6. Verificación de Repositorio (Modo Bootstrap)
 REPO_DIR=$(pwd)
 if [ ! -d "$REPO_DIR/postfix" ] || [ ! -d "$REPO_DIR/dovecot" ]; then
     echo -e "${BLUE}No se detectaron los archivos de configuración en el directorio actual.${NC}"
@@ -64,16 +78,8 @@ if [ ! -d "$REPO_DIR/postfix" ] || [ ! -d "$REPO_DIR/dovecot" ]; then
     REPO_DIR=$(pwd)
 fi
 
-# ------------------------------------------------------------------------------
-# VARIABLES DE CONFIGURACIÓN (Ajustables)
-# ------------------------------------------------------------------------------
-REMOTE_LOG_SERVER="" 
-INITIALIZE_LOCAL_LDAP="true"
-LDAP_ADMIN_PASS="admin"
-# ------------------------------------------------------------------------------
-
-# 3. Instalación de Paquetes
-echo -e "${GREEN}[3/6] Instalando paquetes del servidor de correo...${NC}"
+# 7. Instalación de Paquetes
+echo -e "${GREEN}[4/7] Instalando paquetes del servidor de correo...${NC}"
 export DEBIAN_FRONTEND=noninteractive
 apt install -y \
     postfix \
@@ -85,8 +91,8 @@ apt install -y \
     roundcube roundcube-sqlite3 apache2 libapache2-mod-php \
     swaks mailutils wget curl php-ldap php-imap imapsync sqlite3
 
-# 4. Creación de directorios y Despliegue de Configuraciones
-echo -e "${GREEN}[4/6] Desplegando archivos de configuración...${NC}"
+# 8. Despliegue de Configuraciones
+echo -e "${GREEN}[5/7] Desplegando archivos de configuración...${NC}"
 mkdir -p /etc/postfix /etc/dovecot/conf.d /etc/opendkim/keys /etc/spamassassin /etc/clamav /etc/roundcube /etc/apache2/sites-available
 
 # --- Postfix ---
@@ -121,25 +127,18 @@ fi
 # Mapeo de aliases de Postfix
 postmap /etc/postfix/virtual_aliases || true
 
-# 5. Ajuste de Permisos y Dueños
-echo -e "${GREEN}[5/6] Ajustando permisos de seguridad...${NC}"
+# 9. Ajuste de Permisos y Reparación de Servicios Específicos
+echo -e "${GREEN}[6/7] Ajustando permisos y activando SpamAssassin...${NC}"
 chown -R opendkim:opendkim /etc/opendkim/
 chmod 640 /etc/opendkim/KeyTable /etc/opendkim/SigningTable /etc/opendkim/TrustedHosts || true
-if [ -f /etc/opendkim/keys/default.private ]; then
-    chmod 600 /etc/opendkim/keys/default.private
-    chown opendkim:opendkim /etc/opendkim/keys/default.private
-fi
-chown -R root:root /etc/postfix /etc/dovecot
-chown -R clamav:clamav /etc/clamav/
-chown -R root:www-data /etc/roundcube
-chmod 640 /etc/roundcube/config.inc.php
 
-# Permisos específicos Dovecot LDAP
-chown root:dovecot /etc/dovecot/dovecot-ldap.conf.ext || true
-chmod 640 /etc/dovecot/dovecot-ldap.conf.ext || true
+# SpamAssassin: Forzar activación en Debian/Ubuntu
+if [ -f /etc/default/spamassassin ]; then
+    sed -i 's/ENABLED=0/ENABLED=1/' /etc/default/spamassassin
+    sed -i 's/CRON=0/CRON=1/' /etc/default/spamassassin
+fi
 
 # Apache setup
-echo -e "${GREEN}Configurando Apache y Roundcube...${NC}"
 a2enmod rewrite || true
 PHP_VER=$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;' 2>/dev/null || echo "8.3")
 a2enmod php$PHP_VER || true
@@ -153,35 +152,26 @@ if [ ! -f /var/lib/roundcube/sqlite.db ]; then
     chown www-data:www-data /var/lib/roundcube/sqlite.db
 fi
 
-# Firewall - Abrir puertos necesarios
+# Firewall
 if command -v ufw > /dev/null; then
-    echo -e "${GREEN}Configurando Firewall (UFW)...${NC}"
     ufw allow 25/tcp || true
     ufw allow 80/tcp || true
     ufw allow 143/tcp || true
-    ufw allow 587/tcp || true
-    ufw allow 993/tcp || true
 fi
 
-# Hosts internos
-for DOMAIN in "mail.cujae.local" "mail.local.cujae"; do
-    grep -q "$DOMAIN" /etc/hosts || echo "127.0.0.1 $DOMAIN" >> /etc/hosts
-done
-
-# Rsyslog
-if [ -n "$REMOTE_LOG_SERVER" ]; then
-    echo "mail.* @@$REMOTE_LOG_SERVER:514" > /etc/rsyslog.d/50-remote.conf
-    systemctl restart rsyslog
-fi
-
-# 6. Inicialización de LDAP Local
+# 10. Inicialización de LDAP Local
 if [ "$INITIALIZE_LOCAL_LDAP" = "true" ] && [ -f "$REPO_DIR/ldap_scripts/initial_users.ldif" ]; then
-    echo -e "${GREEN}[6/6] Inicializando usuarios en LDAP local (Estudiante1/2)...${NC}"
+    echo -e "${GREEN}[7/7] Inicializando usuarios en LDAP local (Estudiante1/2)...${NC}"
+    # Re-configuración para asegurar que el sufijo es correcto
+    if ! ldapsearch -x -b "dc=cujae,dc=local" > /dev/null 2>&1; then
+        echo -e "${YELLOW}Re-configurando slapd para cujae.local...${NC}"
+        dpkg-reconfigure -f noninteractive slapd || true
+    fi
     ldapadd -x -D "cn=admin,dc=cujae,dc=local" -w "$LDAP_ADMIN_PASS" -f "$REPO_DIR/ldap_scripts/initial_users.ldif" || echo "Aviso: Usuarios ya existentes o falló la conexión"
 fi
 
-# 7. Reinicio de Servicios
-echo -e "${GREEN}[6/6] Reiniciando servicios y validando puertos...${NC}"
+# 11. Reinicio de Servicios
+echo -e "${GREEN}Reiniciando servicios y validando puertos...${NC}"
 chmod +x "$REPO_DIR/scripts/restart-mailserver.sh"
 "$REPO_DIR/scripts/restart-mailserver.sh"
 

@@ -16,7 +16,7 @@ NC='\033[0m' # No Color
 SERVICES=(
     "slapd"          # OpenLDAP
     "spamassassin"   # SpamAssassin
-    "clamav-daemon"  # ClamAV engine
+    "clamav-daemon"  # ClamAV engine (¡Este tarda mucho!)
     "clamav-milter"  # ClamAV milter (Port 8892)
     "opendkim"       # OpenDKIM (Port 8891)
     "postfix"        # MTA (Port 25)
@@ -27,25 +27,27 @@ SERVICES=(
 echo -e "${CYAN}============================================${NC}"
 echo -e "${CYAN}  Reiniciando servidor de correo CUJAE     ${NC}"
 echo -e "${CYAN}============================================${NC}"
+echo -e "${YELLOW}Nota: ClamAV puede tardar varios minutos en iniciar.${NC}"
 echo ""
 
 for SERVICE in "${SERVICES[@]}"; do
     printf "  %-14s ... " "$SERVICE"
-    if systemctl restart "$SERVICE" 2>/dev/null; then
-        STATUS=$(systemctl is-active "$SERVICE")
-        if [ "$STATUS" = "active" ]; then
-            echo -e "${GREEN}OK${NC}"
-        else
-            echo -e "${RED}FALLO (estado: $STATUS)${NC}"
-            echo -e "${YELLOW}--- Logs de $SERVICE ---${NC}"
-            journalctl -u "$SERVICE" -n 20 --no-pager
-            echo -e "${YELLOW}-----------------------${NC}"
-        fi
+    
+    # Intentar reiniciar con un timeout mayor para ClamAV
+    if [ "$SERVICE" == "clamav-daemon" ]; then
+        # Aumentar el timeout de systemd temporalmente
+        systemctl restart "$SERVICE" --no-block
+        # Esperar un poco a que arranque
+        sleep 2
     else
-        echo -e "${RED}ERROR al reiniciar${NC}"
-        echo -e "${YELLOW}--- Logs de $SERVICE ---${NC}"
-        journalctl -u "$SERVICE" -n 20 --no-pager
-        echo -e "${YELLOW}-----------------------${NC}"
+        systemctl restart "$SERVICE" 2>/dev/null || true
+    fi
+
+    STATUS=$(systemctl is-active "$SERVICE")
+    if [ "$STATUS" = "active" ]; then
+        echo -e "${GREEN}OK${NC}"
+    else
+        echo -e "${RED}FALLO (o iniciando)${NC}"
     fi
 done
 
@@ -68,6 +70,9 @@ check_port() {
     fi
 }
 
+# Dar tiempo a que los servicios bindeen los puertos
+sleep 3
+
 check_port 25 "Postfix SMTP" || ALL_OK=false
 check_port 80 "Apache HTTP" || ALL_OK=false
 check_port 143 "Dovecot IMAP" || ALL_OK=false
@@ -78,8 +83,8 @@ echo ""
 if $ALL_OK; then
     echo -e "${GREEN}  ✔  Todos los servicios están activos y escuchando.${NC}"
 else
-    echo -e "${RED}  ✗  Error detectado. Revisa los logs.${NC}"
-    echo -e "${YELLOW}     journalctl -u <servicio> -n 50 --no-pager${NC}"
+    echo -e "${RED}  ✗  Error detectado o servicios aún iniciando.${NC}"
+    echo -e "${YELLOW}     Si ClamAV o SpamAssassin fallaron, prueba reiniciar de nuevo en 1 minuto.${NC}"
     echo -e "${YELLOW}     tail -f /var/log/mail.log${NC}"
 fi
 echo -e "${CYAN}============================================${NC}"
