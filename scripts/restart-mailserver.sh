@@ -14,10 +14,6 @@ CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 SERVICES=(
-    "slapd"          # OpenLDAP
-    "spamassassin"   # SpamAssassin
-    "clamav-daemon"  # ClamAV engine (¡Este tarda mucho!)
-    "clamav-milter"  # ClamAV milter (Port 8892)
     "opendkim"       # OpenDKIM (Port 8891)
     "postfix"        # MTA (Port 25)
     "dovecot"        # IMAP/LMTP (Port 143)
