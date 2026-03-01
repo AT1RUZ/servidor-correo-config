@@ -14,69 +14,73 @@ CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 SERVICES=(
-    "slapd"        # OpenLDAP  (primero: autenticación)
-    "opendkim"     # OpenDKIM  (antes de Postfix: milter)
-    "postfix"      # Postfix   (MTA)
-    "dovecot"      # Dovecot   (IMAP/LMTP)
+    "opendkim"       # OpenDKIM (Port 8891)
+    "postfix"        # MTA (Port 25)
+    "dovecot"        # IMAP/LMTP (Port 143)
+    "apache2"        # Webmail (Port 80)
 )
 
 echo -e "${CYAN}============================================${NC}"
 echo -e "${CYAN}  Reiniciando servidor de correo CUJAE     ${NC}"
 echo -e "${CYAN}============================================${NC}"
+echo -e "${YELLOW}Nota: ClamAV puede tardar varios minutos en iniciar.${NC}"
 echo ""
 
 for SERVICE in "${SERVICES[@]}"; do
-    printf "  %-12s ... " "$SERVICE"
-    if systemctl restart "$SERVICE" 2>/dev/null; then
-        STATUS=$(systemctl is-active "$SERVICE")
-        if [ "$STATUS" = "active" ]; then
-            echo -e "${GREEN}OK${NC}"
-        else
-            echo -e "${RED}FALLO (estado: $STATUS)${NC}"
-            echo -e "${YELLOW}--- Logs de $SERVICE ---${NC}"
-            journalctl -u "$SERVICE" -n 20 --no-pager
-            echo -e "${YELLOW}-----------------------${NC}"
-        fi
+    printf "  %-14s ... " "$SERVICE"
+    
+    # Intentar reiniciar con un timeout mayor para ClamAV
+    if [ "$SERVICE" == "clamav-daemon" ]; then
+        # Aumentar el timeout de systemd temporalmente
+        systemctl restart "$SERVICE" --no-block
+        # Esperar un poco a que arranque
+        sleep 2
     else
-        echo -e "${RED}ERROR al reiniciar${NC}"
-        echo -e "${YELLOW}--- Logs de $SERVICE ---${NC}"
-        journalctl -u "$SERVICE" -n 20 --no-pager
-        echo -e "${YELLOW}-----------------------${NC}"
+        systemctl restart "$SERVICE" 2>/dev/null || true
+    fi
+
+    STATUS=$(systemctl is-active "$SERVICE")
+    if [ "$STATUS" = "active" ]; then
+        echo -e "${GREEN}OK${NC}"
+    else
+        echo -e "${RED}FALLO (o iniciando)${NC}"
     fi
 done
 
 echo ""
 echo -e "${CYAN}============================================${NC}"
-echo -e "${YELLOW}  Estado final de los servicios:${NC}"
+echo -e "${YELLOW}  Verificación de Puertos:${NC}"
 echo -e "${CYAN}============================================${NC}"
-echo ""
 
 ALL_OK=true
-for SERVICE in "${SERVICES[@]}"; do
-    STATUS=$(systemctl is-active "$SERVICE" 2>/dev/null)
-    if [ "$STATUS" = "active" ]; then
-        printf "  %-12s ${GREEN}●  activo${NC}\n" "$SERVICE"
+
+check_port() {
+    local PORT=$1
+    local DESC=$2
+    if ss -tlnp 2>/dev/null | grep -q ":$PORT "; then
+        echo -e "  Puerto $PORT ($DESC)  ${GREEN}● escuchando${NC}"
+        return 0
     else
-        printf "  %-12s ${RED}✗  $STATUS${NC}\n" "$SERVICE"
-        ALL_OK=false
+        echo -e "  Puerto $PORT ($DESC)  ${RED}✗ no disponible${NC}"
+        return 1
     fi
-done
+}
 
-echo ""
+# Dar tiempo a que los servicios bindeen los puertos
+sleep 3
 
-# Verificar que OpenDKIM está escuchando en el puerto TCP
-if ss -tlnp 2>/dev/null | grep -q ':8891'; then
-    echo -e "  Puerto 8891 (OpenDKIM)  ${GREEN}● escuchando${NC}"
-else
-    echo -e "  Puerto 8891 (OpenDKIM)  ${RED}✗ no disponible${NC}"
-    ALL_OK=false
-fi
+check_port 25 "Postfix SMTP" || ALL_OK=false
+check_port 80 "Apache HTTP" || ALL_OK=false
+check_port 143 "Dovecot IMAP" || ALL_OK=false
+check_port 8891 "OpenDKIM" || ALL_OK=false
+check_port 8892 "ClamAV Milter" || ALL_OK=false
 
 echo ""
 if $ALL_OK; then
-    echo -e "${GREEN}  ✔  Todos los servicios están activos.${NC}"
+    echo -e "${GREEN}  ✔  Todos los servicios están activos y escuchando.${NC}"
 else
-    echo -e "${RED}  ✗  Algún servicio no arrancó correctamente. Revisa los logs.${NC}"
-    echo -e "${YELLOW}     journalctl -u <servicio> -n 50${NC}"
+    echo -e "${RED}  ✗  Error detectado o servicios aún iniciando.${NC}"
+    echo -e "${YELLOW}     Si ClamAV o SpamAssassin fallaron, prueba reiniciar de nuevo en 1 minuto.${NC}"
+    echo -e "${YELLOW}     tail -f /var/log/mail.log${NC}"
 fi
 echo -e "${CYAN}============================================${NC}"

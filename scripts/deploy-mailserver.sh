@@ -4,6 +4,7 @@
 # Script de Despliegue y Portabilidad del Servidor de Correo (CUJAE)
 # ==============================================================================
 # Este script automatiza la instalación de paquetes y el despliegue de
+# Este script automatiza la instalación de paquetes y el despliegue de
 # configuraciones para Postfix, Dovecot, LDAP, OpenDKIM, SpamAssassin, ClamAV
 # Roundcube y Apache.
 #
