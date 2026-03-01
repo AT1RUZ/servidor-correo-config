@@ -264,17 +264,32 @@ fi
 # ==============================================================================
 # 8. Firmas de ClamAV
 # ==============================================================================
-echo -e "${GREEN}[6/8] Descargando firmas de ClamAV (~230 MB, puede tardar varios minutos)...${NC}"
-# Detener el servicio freshclam antes de correrlo manualmente,
-# de lo contrario el servicio bloquea el log y freshclam falla
-systemctl stop clamav-freshclam || true
-freshclam || echo -e "${YELLOW}Advertencia: freshclam falló. ClamAV puede no funcionar hasta que las firmas estén disponibles.${NC}"
-systemctl start clamav-freshclam || true
+echo -e "${GREEN}[6/8] Verificando firmas de ClamAV...${NC}"
 
-# Arrancar ClamAV daemon una vez que las firmas están listas
-systemctl start clamav-daemon || true
-sleep 10
-systemctl restart clamav-milter || true
+CLAMAV_DB_DIR="/var/lib/clamav"
+CLAMAV_HAS_SIGS=false
+
+# Comprobar si ya existen firmas válidas (main.cvd/cld o daily.cvd/cld)
+if ls "$CLAMAV_DB_DIR"/main.cv* "$CLAMAV_DB_DIR"/daily.cv* \
+      "$CLAMAV_DB_DIR"/main.cl* "$CLAMAV_DB_DIR"/daily.cl* 2>/dev/null | grep -q .; then
+    CLAMAV_HAS_SIGS=true
+fi
+
+if $CLAMAV_HAS_SIGS; then
+    echo -e "${GREEN}  Firmas de ClamAV encontradas — arrancando daemon...${NC}"
+    systemctl stop clamav-freshclam || true
+    systemctl start clamav-daemon || true
+    sleep 10
+    systemctl restart clamav-milter || true
+    systemctl start clamav-freshclam || true
+else
+    echo -e "${YELLOW}  Firmas de ClamAV NO encontradas.${NC}"
+    echo -e "${YELLOW}  ClamAV quedará en espera hasta que copies las firmas manualmente.${NC}"
+    echo -e "${YELLOW}  Ver instrucciones al final del despliegue.${NC}"
+    # Dejar freshclam detenido; milter_default_action=accept en main.cf
+    # garantiza que los correos se entreguen igualmente aunque ClamAV esté inactivo
+    systemctl stop clamav-freshclam clamav-daemon clamav-milter || true
+fi
 
 # ==============================================================================
 # 9. Despliegue de Configuraciones
@@ -539,3 +554,32 @@ echo ""
 echo -e "${BLUE}=== Despliegue Completado Exitosamente ===${NC}"
 echo -e "${GREEN}  Roundcube: http://$(hostname -I | awk '{print $1}')/roundcube/${NC}"
 echo -e "${GREEN}  LDAP DN:   cn=admin,${LDAP_DC}${NC}"
+
+# ==============================================================================
+# RECORDATORIO: Firmas de ClamAV
+# ==============================================================================
+if ! $CLAMAV_HAS_SIGS; then
+    echo ""
+    echo -e "${YELLOW}╔══════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${YELLOW}║         PASO PENDIENTE: Firmas de ClamAV                    ║${NC}"
+    echo -e "${YELLOW}╠══════════════════════════════════════════════════════════════╣${NC}"
+    echo -e "${YELLOW}║ ClamAV está inactivo porque no tiene firmas de virus.        ║${NC}"
+    echo -e "${YELLOW}║ El correo funciona normalmente pero sin escaneo antivirus.   ║${NC}"
+    echo -e "${YELLOW}║                                                              ║${NC}"
+    echo -e "${YELLOW}║ Para activarlo, copia las firmas desde el servidor que ya    ║${NC}"
+    echo -e "${YELLOW}║ las tiene descargadas. Ejecuta en ESTE servidor:             ║${NC}"
+    echo -e "${YELLOW}║                                                              ║${NC}"
+    echo -e "${CYAN}║  sudo scp USUARIO@IP_ORIGEN:/var/lib/clamav/*.cvd \          ║${NC}"
+    echo -e "${CYAN}║           /var/lib/clamav/                                  ║${NC}"
+    echo -e "${CYAN}║  sudo scp USUARIO@IP_ORIGEN:/var/lib/clamav/*.cld \          ║${NC}"
+    echo -e "${CYAN}║           /var/lib/clamav/ 2>/dev/null                      ║${NC}"
+    echo -e "${CYAN}║  sudo chown -R clamav:clamav /var/lib/clamav/               ║${NC}"
+    echo -e "${CYAN}║  sudo systemctl start clamav-daemon                         ║${NC}"
+    echo -e "${CYAN}║  sleep 15                                                   ║${NC}"
+    echo -e "${CYAN}║  sudo systemctl start clamav-milter clamav-freshclam        ║${NC}"
+    echo -e "${YELLOW}║                                                              ║${NC}"
+    echo -e "${YELLOW}║ Ejemplo para copiar desde la VM local (192.168.64.130):      ║${NC}"
+    echo -e "${CYAN}║  sudo scp diego@192.168.64.130:/var/lib/clamav/*.cvd \        ║${NC}"
+    echo -e "${CYAN}║           /var/lib/clamav/                                  ║${NC}"
+    echo -e "${YELLOW}╚══════════════════════════════════════════════════════════════╝${NC}"
+fi
