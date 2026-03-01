@@ -83,7 +83,7 @@ apt install -y \
     spamassassin spamc \
     clamav-daemon clamav-milter clamav-freshclam \
     roundcube roundcube-sqlite3 apache2 libapache2-mod-php \
-    swaks mailutils wget curl php-ldap php-imap imapsync
+    swaks mailutils wget curl php-ldap php-imap imapsync sqlite3
 
 # 4. Creación de directorios y Despliegue de Configuraciones
 echo -e "${GREEN}[4/6] Desplegando archivos de configuración...${NC}"
@@ -101,11 +101,8 @@ fi
 
 # --- OpenDKIM ---
 if [ -d "$REPO_DIR/opendkim" ]; then
-    # Configuración principal
     [ -f "$REPO_DIR/opendkim/opendkim.conf" ] && cp -v "$REPO_DIR/opendkim/opendkim.conf" /etc/opendkim.conf
-    # Configuración de servicio Debian (Socket TCP)
     [ -f "$REPO_DIR/opendkim/opendkim" ] && cp -v "$REPO_DIR/opendkim/opendkim" /etc/default/opendkim
-    # Tablas y llaves
     cp -rv "$REPO_DIR/opendkim"/* /etc/opendkim/
 fi
 
@@ -142,11 +139,29 @@ chown root:dovecot /etc/dovecot/dovecot-ldap.conf.ext || true
 chmod 640 /etc/dovecot/dovecot-ldap.conf.ext || true
 
 # Apache setup
+echo -e "${GREEN}Configurando Apache y Roundcube...${NC}"
 a2enmod rewrite || true
-a2enmod php* || true
+PHP_VER=$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;' 2>/dev/null || echo "8.3")
+a2enmod php$PHP_VER || true
 a2enconf roundcube || true
 a2ensite mail.cujae.local.conf || true
 a2dissite 000-default.conf || true
+
+# Asegurar base de datos de Roundcube
+if [ ! -f /var/lib/roundcube/sqlite.db ]; then
+    sqlite3 /var/lib/roundcube/sqlite.db < /usr/share/dbconfig-common/data/roundcube/install/sqlite3 2>/dev/null || true
+    chown www-data:www-data /var/lib/roundcube/sqlite.db
+fi
+
+# Firewall - Abrir puertos necesarios
+if command -v ufw > /dev/null; then
+    echo -e "${GREEN}Configurando Firewall (UFW)...${NC}"
+    ufw allow 25/tcp || true
+    ufw allow 80/tcp || true
+    ufw allow 143/tcp || true
+    ufw allow 587/tcp || true
+    ufw allow 993/tcp || true
+fi
 
 # Hosts internos
 for DOMAIN in "mail.cujae.local" "mail.local.cujae"; do
@@ -166,7 +181,7 @@ if [ "$INITIALIZE_LOCAL_LDAP" = "true" ] && [ -f "$REPO_DIR/ldap_scripts/initial
 fi
 
 # 7. Reinicio de Servicios
-echo -e "${GREEN}[6/6] Reiniciando servicios...${NC}"
+echo -e "${GREEN}[6/6] Reiniciando servicios y validando puertos...${NC}"
 chmod +x "$REPO_DIR/scripts/restart-mailserver.sh"
 "$REPO_DIR/scripts/restart-mailserver.sh"
 
