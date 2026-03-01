@@ -216,7 +216,7 @@ SQLEOF
 
 # Resto de paquetes
 apt install -y \
-    postfix \
+    postfix postfix-ldap \
     dovecot-core dovecot-imapd dovecot-pop3d dovecot-lmtpd dovecot-ldap \
     slapd ldap-utils \
     opendkim opendkim-tools \
