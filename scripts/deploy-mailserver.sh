@@ -378,6 +378,9 @@ fi
 # --- SpamAssassin & ClamAV configs ---
 [ -d "$REPO_DIR/spamassassin" ] && cp -rv "$REPO_DIR/spamassassin"/* /etc/spamassassin/
 [ -d "$REPO_DIR/clamav" ]       && cp -rv "$REPO_DIR/clamav"/* /etc/clamav/
+# Forzar LogSyslog true para que ClamAV escriba en syslog → mail.log
+sed -i 's/^LogSyslog false/LogSyslog true/' /etc/clamav/clamav-milter.conf
+sed -i 's/^LogSyslog false/LogSyslog true/' /etc/clamav/clamd.conf
 
 # --- Apache ---
 [ -f "$REPO_DIR/apache/mail.cujae.local.conf" ] && \
@@ -479,24 +482,56 @@ cat > /etc/rsyslog.d/50-mailserver.conf << 'RSYSLOGCONF'
 # ==============================================================
 # Logs centralizados del Servidor de Correo CUJAE
 # ==============================================================
+# IMPORTANTE: cada bloque escribe en su archivo específico Y
+# también deja caer el mensaje al archivo general (mail.log).
+# El "& ~" al final de cada bloque evita duplicados en syslog.
 
-# Log general de mail (Postfix, Dovecot, OpenDKIM, etc.)
-mail.*                          /var/log/mailserver/mail.log
+# ── Postfix (usa facility mail) ───────────────────────────────
+if $programname startswith 'postfix' then {
+    action(type="omfile" file="/var/log/mailserver/smtp.log")
+    action(type="omfile" file="/var/log/mailserver/mail.log")
+    stop
+}
 
-# Solo errores de mail
+# ── Dovecot (usa facility mail) ───────────────────────────────
+if $programname == 'dovecot' then {
+    action(type="omfile" file="/var/log/mailserver/auth.log")
+    action(type="omfile" file="/var/log/mailserver/mail.log")
+    stop
+}
+
+# ── OpenDKIM (usa facility mail o daemon según versión) ───────
+if $programname == 'opendkim' then {
+    action(type="omfile" file="/var/log/mailserver/mail.log")
+    stop
+}
+# OpenDKIM a veces usa facility daemon en lugar de mail
+if $syslogfacility-text == 'daemon' and $programname == 'opendkim' then {
+    action(type="omfile" file="/var/log/mailserver/mail.log")
+    stop
+}
+
+# ── SpamAssassin (spamd, usa facility mail) ───────────────────
+if $programname == 'spamd' then {
+    action(type="omfile" file="/var/log/mailserver/spam.log")
+    action(type="omfile" file="/var/log/mailserver/mail.log")
+    stop
+}
+
+# ── ClamAV daemon y milter (usan facility local6) ─────────────
+if $programname startswith 'clam' then {
+    action(type="omfile" file="/var/log/mailserver/clamav.log")
+    action(type="omfile" file="/var/log/mailserver/mail.log")
+    stop
+}
+if $syslogfacility-text == 'local6' then {
+    action(type="omfile" file="/var/log/mailserver/clamav.log")
+    action(type="omfile" file="/var/log/mailserver/mail.log")
+    stop
+}
+
+# ── Errores de cualquier servicio de mail ─────────────────────
 mail.err                        /var/log/mailserver/mail.err
-
-# SMTP: entregas y rechazos (Postfix)
-if $programname == 'postfix' then /var/log/mailserver/smtp.log
-
-# Autenticación IMAP/SASL (Dovecot)
-if $programname == 'dovecot' then /var/log/mailserver/auth.log
-
-# SpamAssassin
-if $programname == 'spamd' then /var/log/mailserver/spam.log
-
-# ClamAV
-if $programname startswith 'clam' then /var/log/mailserver/clamav.log
 RSYSLOGCONF
 
 # Configurar logrotate para rotar los logs semanalmente
