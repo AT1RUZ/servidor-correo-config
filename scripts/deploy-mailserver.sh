@@ -121,7 +121,6 @@ echo -e "  BD Roundcube:      ${GREEN}$MYSQL_ROUNDCUBE_DB${NC}"
 echo -e "  Usuario BD:        ${GREEN}$MYSQL_ROUNDCUBE_USER${NC}"
 echo -e "  Pass BD:           ${GREEN}[configurado]${NC}"
 echo -e "  Repositorio:       ${GREEN}$GIT_REPO_URL${NC}"
-echo -e "  Firmas ClamAV:     ${GREEN}Descargar con freshclam (~230 MB)${NC}"
 echo -e "  Inicializar LDAP:  ${GREEN}$INITIALIZE_LOCAL_LDAP${NC}"
 echo ""
 echo -en "${YELLOW}¿Continuar con el despliegue? [s/n] [s]: ${NC}"
@@ -221,7 +220,6 @@ apt install -y \
     slapd ldap-utils \
     opendkim opendkim-tools \
     spamassassin spamc \
-    clamav-daemon clamav-milter clamav-freshclam \
     roundcube roundcube-mysql apache2 libapache2-mod-php \
     swaks mailutils wget curl php-ldap php-imap sqlite3
 
@@ -262,34 +260,25 @@ EOF
 fi
 
 # ==============================================================================
-# 8. Firmas de ClamAV
+# 8. Antivirus
 # ==============================================================================
-echo -e "${GREEN}[6/8] Verificando firmas de ClamAV...${NC}"
-
-CLAMAV_DB_DIR="/var/lib/clamav"
-CLAMAV_HAS_SIGS=false
-
-# Comprobar si ya existen firmas válidas (main.cvd/cld o daily.cvd/cld)
-if ls "$CLAMAV_DB_DIR"/main.cv* "$CLAMAV_DB_DIR"/daily.cv* \
-      "$CLAMAV_DB_DIR"/main.cl* "$CLAMAV_DB_DIR"/daily.cl* 2>/dev/null | grep -q .; then
-    CLAMAV_HAS_SIGS=true
-fi
-
-if $CLAMAV_HAS_SIGS; then
-    echo -e "${GREEN}  Firmas de ClamAV encontradas — arrancando daemon...${NC}"
-    systemctl stop clamav-freshclam || true
-    systemctl start clamav-daemon || true
-    sleep 10
-    systemctl restart clamav-milter || true
-    systemctl start clamav-freshclam || true
-else
-    echo -e "${YELLOW}  Firmas de ClamAV NO encontradas.${NC}"
-    echo -e "${YELLOW}  ClamAV quedará en espera hasta que copies las firmas manualmente.${NC}"
-    echo -e "${YELLOW}  Ver instrucciones al final del despliegue.${NC}"
-    # Dejar freshclam detenido; milter_default_action=accept en main.cf
-    # garantiza que los correos se entreguen igualmente aunque ClamAV esté inactivo
-    systemctl stop clamav-freshclam clamav-daemon clamav-milter || true
-fi
+# El antivirus NO se instala en este script. Será indicado por el equipo de
+# sistemas de la CUJAE. Una vez instalado, integrarlo con Postfix así:
+#
+#   1. En /etc/postfix/main.cf, añadir el socket del milter del antivirus:
+#
+#      smtpd_milters = inet:127.0.0.1:8891, inet:127.0.0.1:PUERTO_ANTIVIRUS
+#      non_smtpd_milters = inet:127.0.0.1:8891, inet:127.0.0.1:PUERTO_ANTIVIRUS
+#
+#      (8891 es OpenDKIM — no quitarlo)
+#      (sustituir PUERTO_ANTIVIRUS por el puerto real del nuevo antivirus)
+#
+#   2. Reiniciar Postfix:
+#      sudo systemctl restart postfix@-.service
+#
+# Por ahora milter_default_action=accept en main.cf garantiza que los correos
+# se entreguen aunque no haya antivirus activo.
+echo -e "${YELLOW}[6/8] Antivirus omitido — pendiente de indicación del equipo de sistemas.${NC}"
 
 # ==============================================================================
 # 9. Despliegue de Configuraciones
@@ -300,6 +289,15 @@ mkdir -p /etc/postfix /etc/dovecot/conf.d /etc/opendkim/keys \
 
 # --- Postfix ---
 [ -d "$REPO_DIR/postfix" ] && cp -rv "$REPO_DIR/postfix"/* /etc/postfix/
+
+# Quitar el milter de ClamAV (8892) de main.cf — el antivirus lo indicará sistemas
+# Dejar solo OpenDKIM (8891) activo
+sed -i 's|^smtpd_milters = .*|smtpd_milters = inet:127.0.0.1:8891|' /etc/postfix/main.cf
+sed -i 's|^non_smtpd_milters = .*|non_smtpd_milters = inet:127.0.0.1:8891|' /etc/postfix/main.cf
+# Añadir comentario explicativo sobre cómo integrar el nuevo antivirus
+sed -i '/^smtpd_milters/a # ANTIVIRUS: cuando sistemas indique el antivirus, añadir su socket aquí:
+# smtpd_milters = inet:127.0.0.1:8891, inet:127.0.0.1:PUERTO_ANTIVIRUS
+# non_smtpd_milters = inet:127.0.0.1:8891, inet:127.0.0.1:PUERTO_ANTIVIRUS' /etc/postfix/main.cf
 
 # FIX: /etc/mailname requerido por main.cf (myorigin = /etc/mailname)
 # Debe contener el DOMINIO (cujae.local), no el hostname (mail.cujae.local),
@@ -375,12 +373,9 @@ if [ "$RC_TABLE_COUNT" -lt 5 ]; then
     fi
 fi
 
-# --- SpamAssassin & ClamAV configs ---
+# --- SpamAssassin configs ---
 [ -d "$REPO_DIR/spamassassin" ] && cp -rv "$REPO_DIR/spamassassin"/* /etc/spamassassin/
-[ -d "$REPO_DIR/clamav" ]       && cp -rv "$REPO_DIR/clamav"/* /etc/clamav/
-# Forzar LogSyslog true para que ClamAV escriba en syslog → mail.log
-sed -i 's/^LogSyslog false/LogSyslog true/' /etc/clamav/clamav-milter.conf
-sed -i 's/^LogSyslog false/LogSyslog true/' /etc/clamav/clamd.conf
+# ClamAV: no se copia configuración — antivirus pendiente de indicación de sistemas
 
 # --- Apache ---
 [ -f "$REPO_DIR/apache/mail.cujae.local.conf" ] && \
@@ -469,8 +464,6 @@ touch /var/log/mailserver/smtp.log
 touch /var/log/mailserver/auth.log
 # Log de SpamAssassin
 touch /var/log/mailserver/spam.log
-# Log de ClamAV
-touch /var/log/mailserver/clamav.log
 
 # Permisos: syslog escribe, root y el grupo adm pueden leer
 chown -R syslog:adm /var/log/mailserver
@@ -518,18 +511,6 @@ if $programname == 'spamd' then {
     stop
 }
 
-# ── ClamAV daemon y milter (usan facility local6) ─────────────
-if $programname startswith 'clam' then {
-    action(type="omfile" file="/var/log/mailserver/clamav.log")
-    action(type="omfile" file="/var/log/mailserver/mail.log")
-    stop
-}
-if $syslogfacility-text == 'local6' then {
-    action(type="omfile" file="/var/log/mailserver/clamav.log")
-    action(type="omfile" file="/var/log/mailserver/mail.log")
-    stop
-}
-
 # ── Errores de cualquier servicio de mail ─────────────────────
 mail.err                        /var/log/mailserver/mail.err
 RSYSLOGCONF
@@ -560,7 +541,6 @@ echo -e "  mail.err   — Solo errores"
 echo -e "  smtp.log   — Postfix (entregas/rechazos)"
 echo -e "  auth.log   — Dovecot (autenticación IMAP/SASL)"
 echo -e "  spam.log   — SpamAssassin"
-echo -e "  clamav.log — ClamAV"
 
 # Firewall
 if command -v ufw > /dev/null; then
@@ -589,32 +569,3 @@ echo ""
 echo -e "${BLUE}=== Despliegue Completado Exitosamente ===${NC}"
 echo -e "${GREEN}  Roundcube: http://$(hostname -I | awk '{print $1}')/roundcube/${NC}"
 echo -e "${GREEN}  LDAP DN:   cn=admin,${LDAP_DC}${NC}"
-
-# ==============================================================================
-# RECORDATORIO: Firmas de ClamAV
-# ==============================================================================
-if ! $CLAMAV_HAS_SIGS; then
-    echo ""
-    echo -e "${YELLOW}╔══════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${YELLOW}║         PASO PENDIENTE: Firmas de ClamAV                    ║${NC}"
-    echo -e "${YELLOW}╠══════════════════════════════════════════════════════════════╣${NC}"
-    echo -e "${YELLOW}║ ClamAV está inactivo porque no tiene firmas de virus.        ║${NC}"
-    echo -e "${YELLOW}║ El correo funciona normalmente pero sin escaneo antivirus.   ║${NC}"
-    echo -e "${YELLOW}║                                                              ║${NC}"
-    echo -e "${YELLOW}║ Para activarlo, copia las firmas desde el servidor que ya    ║${NC}"
-    echo -e "${YELLOW}║ las tiene descargadas. Ejecuta en ESTE servidor:             ║${NC}"
-    echo -e "${YELLOW}║                                                              ║${NC}"
-    echo -e "${CYAN}║  sudo scp USUARIO@IP_ORIGEN:/var/lib/clamav/*.cvd \          ║${NC}"
-    echo -e "${CYAN}║           /var/lib/clamav/                                  ║${NC}"
-    echo -e "${CYAN}║  sudo scp USUARIO@IP_ORIGEN:/var/lib/clamav/*.cld \          ║${NC}"
-    echo -e "${CYAN}║           /var/lib/clamav/ 2>/dev/null                      ║${NC}"
-    echo -e "${CYAN}║  sudo chown -R clamav:clamav /var/lib/clamav/               ║${NC}"
-    echo -e "${CYAN}║  sudo systemctl start clamav-daemon                         ║${NC}"
-    echo -e "${CYAN}║  sleep 15                                                   ║${NC}"
-    echo -e "${CYAN}║  sudo systemctl start clamav-milter clamav-freshclam        ║${NC}"
-    echo -e "${YELLOW}║                                                              ║${NC}"
-    echo -e "${YELLOW}║ Ejemplo para copiar desde la VM local (192.168.64.130):      ║${NC}"
-    echo -e "${CYAN}║  sudo scp diego@192.168.64.130:/var/lib/clamav/*.cvd \        ║${NC}"
-    echo -e "${CYAN}║           /var/lib/clamav/                                  ║${NC}"
-    echo -e "${YELLOW}╚══════════════════════════════════════════════════════════════╝${NC}"
-fi
