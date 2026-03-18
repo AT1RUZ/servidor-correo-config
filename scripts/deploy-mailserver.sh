@@ -77,8 +77,8 @@ fi
 # Todos los valores tienen defaults. Si se presiona Enter se usa el default.
 # ==============================================================================
 echo -e "${BLUE}--- Configuración General ---${NC}"
-prompt_input  "Hostname del servidor"          MAIL_HOSTNAME     "mail.cujae.local"
-prompt_input  "Dominio de correo"              MAIL_DOMAIN       "cujae.local"
+prompt_input  "Hostname del servidor"          MAIL_HOSTNAME     "mail.cujae.edu.cu"
+prompt_input  "Dominio de correo"              MAIL_DOMAIN       "cujae.edu.cu"
 prompt_input  "Organización"                   LDAP_ORG          "CUJAE"
 
 echo ""
@@ -299,9 +299,58 @@ sed -i '/^smtpd_milters/a # ANTIVIRUS: cuando sistemas indique el antivirus, añ
 # smtpd_milters = inet:127.0.0.1:8891, inet:127.0.0.1:PUERTO_ANTIVIRUS
 # non_smtpd_milters = inet:127.0.0.1:8891, inet:127.0.0.1:PUERTO_ANTIVIRUS' /etc/postfix/main.cf
 
+# ------------------------------------------------------------------------------
+# Generar ldap-users.cf con los valores del entorno actual.
+# search_base apunta a la raíz del árbol (LDAP_DC) para cubrir TODAS las OUs:
+#   Area Central, Facultad de Arquitectura, Facultad de Ingeniería Civil,
+#   Facultad de Ingeniería Eléctrica, Facultad de Ingeniería Industrial,
+#   Facultad de Ingeniería Informática, Facultad de Ingeniería Mecánica,
+#   Facultad de Ingeniería Química, Facultad de Ingeniería en Automática
+#   y Biomédica, Facultad de Ingeniería en Telecomunicaciones y Electrónica,
+#   Instituto Ciencias Básicas, Read_QR_Proyect.
+#
+# Cuando el equipo de sistemas proporcione la IP del LDAP institucional,
+# cambiar server_host y bind_dn en /etc/postfix/ldap-users.cf
+# ------------------------------------------------------------------------------
+cat > /etc/postfix/ldap-users.cf << LDAPCF
+# Generado por deploy-mailserver.sh
+# ─────────────────────────────────────────────────────────────────
+# PARA MIGRAR AL LDAP INSTITUCIONAL:
+# 1. Comentar la línea "server_host = localhost"
+# 2. Descomentar y rellenar las tres líneas de abajo
+# 3. Ejecutar: sudo systemctl reload postfix
+# ─────────────────────────────────────────────────────────────────
+# server_host = [IP_LDAP_INSTITUCIONAL]   # ← IP del LDAP de la CUJAE
+# bind_dn     = [BIND_DN_INSTITUCIONAL]   # ← ej: cn=readonly,dc=cujae,dc=edu,dc=cu
+# bind_pw     = [BIND_PASSWORD_INSTITUCIONAL]
+# ─────────────────────────────────────────────────────────────────
+# LDAP LOCAL (activo por ahora):
+server_host = localhost
+search_base = ${LDAP_DC}
+scope = sub
+query_filter = (&(objectClass=inetOrgPerson)(mail=%s))
+result_attribute = mail
+bind = yes
+bind_dn = cn=admin,${LDAP_DC}
+bind_pw = ${LDAP_ADMIN_PASS}
+version = 3
+LDAPCF
+
+# Parchar dovecot-ldap.conf.ext con los mismos valores del entorno
+sed -i "s|^hosts = .*|hosts = localhost|"             /etc/dovecot/dovecot-ldap.conf.ext
+sed -i "s|^dn = .*|dn = cn=admin,${LDAP_DC}|"        /etc/dovecot/dovecot-ldap.conf.ext
+sed -i "s|^dnpass = .*|dnpass = ${LDAP_ADMIN_PASS}|"  /etc/dovecot/dovecot-ldap.conf.ext
+sed -i "s|^base = .*|base = ${LDAP_DC}|"              /etc/dovecot/dovecot-ldap.conf.ext
+# scope subtree para buscar en todas las OUs de facultades
+grep -q "^scope" /etc/dovecot/dovecot-ldap.conf.ext \
+    && sed -i "s|^scope.*|scope = subtree|" /etc/dovecot/dovecot-ldap.conf.ext \
+    || echo "scope = subtree" >> /etc/dovecot/dovecot-ldap.conf.ext
+# Actualizar rutas de buzones al dominio correcto
+sed -i "s|vhosts/[^/]*/|vhosts/${MAIL_DOMAIN}/|g"    /etc/dovecot/dovecot-ldap.conf.ext
+
 # FIX: /etc/mailname requerido por main.cf (myorigin = /etc/mailname)
-# Debe contener el DOMINIO (cujae.local), no el hostname (mail.cujae.local),
-# para que los correos salgan como usuario@cujae.local y no como usuario@mail.cujae.local
+# Debe contener el DOMINIO (cujae.edu.cu), no el hostname (mail.cujae.edu.cu),
+# para que los correos salgan como usuario@cujae.edu.cu y no como usuario@mail.cujae.edu.cu
 echo "$MAIL_DOMAIN" > /etc/mailname
 
 # FIX: Forzar inet_interfaces=all (Ubuntu instala con loopback-only)
@@ -342,6 +391,9 @@ fi
 # debian-db.php que se genera justo después, por lo que no hay conflicto.
 if [ -d "$REPO_DIR/roundcube" ] && [ -f "$REPO_DIR/roundcube/config.inc.php" ]; then
     cp -v "$REPO_DIR/roundcube/config.inc.php" /etc/roundcube/config.inc.php
+    # Actualizar dominio de usuario al dominio real del despliegue
+    sed -i "s|'username_domain'\] = '[^']*'|'username_domain'] = '${MAIL_DOMAIN}'|" /etc/roundcube/config.inc.php
+    sed -i "s|'mail_domain'\] = '[^']*'|'mail_domain'] = '${MAIL_DOMAIN}'|"         /etc/roundcube/config.inc.php
 fi
 
 # Garantizar debian-db.php con los datos correctos
@@ -378,10 +430,41 @@ fi
 # ClamAV: no se copia configuración — antivirus pendiente de indicación de sistemas
 
 # --- Apache ---
-[ -f "$REPO_DIR/apache/mail.cujae.local.conf" ] && \
-    cp -v "$REPO_DIR/apache/mail.cujae.local.conf" /etc/apache2/sites-available/
+# Copiar config del repo y renombrar con el hostname real del despliegue
+if [ -f "$REPO_DIR/apache/mail.cujae.local.conf" ]; then
+    cp -v "$REPO_DIR/apache/mail.cujae.local.conf" \
+        "/etc/apache2/sites-available/${MAIL_HOSTNAME}.conf"
+    # Actualizar ServerName dentro del archivo al hostname real
+    sed -i "s|ServerName mail.cujae.local|ServerName ${MAIL_HOSTNAME}|g" \
+        "/etc/apache2/sites-available/${MAIL_HOSTNAME}.conf"
+fi
 
-# Mapeo de aliases de Postfix
+# Generar virtual_aliases con las facultades actuales
+# Para añadir más facultades, añadir una línea @nueva-facultad.cujae.edu.cu @cujae.edu.cu
+cat > /etc/postfix/virtual_aliases << ALIASEOF
+# Redirección de dominios de facultad al dominio unificado
+# Facultad de Ingeniería Informática (antes @ceis.cujae.edu.cu)
+@ceis.cujae.edu.cu    @${MAIL_DOMAIN}
+# Facultad de Arquitectura (antes @arq.cujae.edu.cu)
+@arq.cujae.edu.cu     @${MAIL_DOMAIN}
+# Para añadir más facultades cuando se integren:
+# @civil.cujae.edu.cu   @${MAIL_DOMAIN}
+# @tesla.cujae.edu.cu   @${MAIL_DOMAIN}
+# @ind.cujae.edu.cu     @${MAIL_DOMAIN}
+# @mecan.cujae.edu.cu   @${MAIL_DOMAIN}
+# @quimica.cujae.edu.cu @${MAIL_DOMAIN}
+# @automatica.cujae.edu.cu @${MAIL_DOMAIN}
+# @tele.cujae.edu.cu    @${MAIL_DOMAIN}
+ALIASEOF
+
+# Actualizar virtual_alias_domains en main.cf con los dominios activos
+postconf -e "virtual_alias_domains = ceis.cujae.edu.cu, arq.cujae.edu.cu"
+# Para añadir más facultades en el futuro:
+# postconf -e "virtual_alias_domains = ceis.cujae.edu.cu, arq.cujae.edu.cu, civil.cujae.edu.cu"
+
+# Actualizar virtual_mailbox_domains al dominio principal real
+postconf -e "virtual_mailbox_domains = ${MAIL_DOMAIN}"
+
 postmap /etc/postfix/virtual_aliases || true
 
 # ==============================================================================
@@ -391,6 +474,12 @@ echo -e "${GREEN}[8/8] Ajustando permisos y activando servicios...${NC}"
 
 chown -R opendkim:opendkim /etc/opendkim/
 chmod 640 /etc/opendkim/KeyTable /etc/opendkim/SigningTable /etc/opendkim/TrustedHosts || true
+
+# Actualizar dominio en ficheros de OpenDKIM al dominio real del despliegue
+sed -i "s|cujae\.local|${MAIL_DOMAIN}|g" /etc/opendkim.conf
+sed -i "s|cujae\.local|${MAIL_DOMAIN}|g" /etc/opendkim/KeyTable
+sed -i "s|cujae\.local|${MAIL_DOMAIN}|g" /etc/opendkim/SigningTable
+sed -i "s|cujae\.local|${MAIL_DOMAIN}|g" /etc/opendkim/TrustedHosts
 
 # SpamAssassin
 if [ -f /etc/default/spamassassin ]; then
@@ -402,7 +491,7 @@ fi
 a2enmod rewrite || true
 PHP_VER=$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;' 2>/dev/null || echo "8.3")
 a2enmod php${PHP_VER} || true
-a2ensite mail.cujae.local.conf || true
+a2ensite "${MAIL_HOSTNAME}.conf" || true
 a2dissite 000-default.conf || true
 
 # FIX ROUNDCUBE: Detectar path real y crear conf de Apache
@@ -552,12 +641,53 @@ if command -v ufw > /dev/null; then
 fi
 
 # Inicialización de usuarios LDAP
-if [ "$INITIALIZE_LOCAL_LDAP" = "true" ] && [ -f "$REPO_DIR/ldap_scripts/initial_users.ldif" ]; then
+if [ "$INITIALIZE_LOCAL_LDAP" = "true" ]; then
     echo -e "${GREEN}Inicializando usuarios en LDAP...${NC}"
     sleep 2
-    ldapadd -x -D "cn=admin,${LDAP_DC}" -w "$LDAP_ADMIN_PASS" \
-        -f "$REPO_DIR/ldap_scripts/initial_users.ldif" \
-        || echo -e "${YELLOW}Aviso: Usuarios ya existentes o falló la conexión LDAP${NC}"
+    # Generar LDIF dinámicamente con el DC correcto y usuarios de prueba reales:
+    # 2 usuarios de Informática (@ceis.cujae.edu.cu) y 2 de Arquitectura (@arq.cujae.edu.cu)
+    # Estos reflejan cómo están los usuarios en el LDAP institucional actual.
+    # En el futuro, cuando se unifique el dominio, los usuarios tendrán @cujae.edu.cu.
+    LDIF_TMP=$(mktemp)
+    cat > "$LDIF_TMP" << LDIFEOF
+dn: ou=people,${LDAP_DC}
+objectClass: organizationalUnit
+ou: people
+
+dn: uid=estudiante1,ou=people,${LDAP_DC}
+objectClass: inetOrgPerson
+uid: estudiante1
+cn: Estudiante1 CEIS
+sn: CEIS
+userPassword: {SSHA}zardPE6ATWxjk34bJFzQOXj7+vri6XM+
+mail: estudiante1@ceis.cujae.edu.cu
+
+dn: uid=estudiante2,ou=people,${LDAP_DC}
+objectClass: inetOrgPerson
+uid: estudiante2
+cn: Estudiante2 CEIS
+sn: CEIS
+userPassword: {SSHA}zardPE6ATWxjk34bJFzQOXj7+vri6XM+
+mail: estudiante2@ceis.cujae.edu.cu
+
+dn: uid=estudiante3,ou=people,${LDAP_DC}
+objectClass: inetOrgPerson
+uid: estudiante3
+cn: Estudiante3 Arq
+sn: ARQ
+userPassword: {SSHA}zardPE6ATWxjk34bJFzQOXj7+vri6XM+
+mail: estudiante3@arq.cujae.edu.cu
+
+dn: uid=estudiante4,ou=people,${LDAP_DC}
+objectClass: inetOrgPerson
+uid: estudiante4
+cn: Estudiante4 Arq
+sn: ARQ
+userPassword: {SSHA}zardPE6ATWxjk34bJFzQOXj7+vri6XM+
+mail: estudiante4@arq.cujae.edu.cu
+LDIFEOF
+    ldapadd -x -D "cn=admin,${LDAP_DC}" -w "$LDAP_ADMIN_PASS"         -f "$LDIF_TMP"         || echo -e "${YELLOW}Aviso: Usuarios ya existentes o falló la conexión LDAP${NC}"
+    rm -f "$LDIF_TMP"
 fi
 
 # Reinicio final de servicios
